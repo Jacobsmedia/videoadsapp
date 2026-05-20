@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getProxyUrl } from "./config.js";
+import { parsePipelineJson } from "./pipeline-import.js";
+import {
+  attachRunAsset,
+  createRunExportPayload,
+  createRunRecord
+} from "./runs.js";
 import {
   getVeo1080pPath,
   getVeoResultUrl,
@@ -10,7 +16,7 @@ import {
 const PROXY = getProxyUrl();
 const headers = { "Content-Type": "application/json" };
 
-const scenes = [
+const defaultScenes = [
   {
     id: 1,
     label: "Hook - Energetic Opening",
@@ -79,8 +85,51 @@ const scenes = [
   }
 ];
 
-const basePrompt =
+const defaultBasePrompt =
   "Photorealistic iPhone front-camera selfie of a woman age 47, natural beauty, shoulder-length wavy blonde hair, soft hazel-green eyes, light freckles, no makeup or very minimal, fine natural skin texture with subtle laugh lines, warm sun-kissed complexion. Candid mid-sentence expression, mouth slightly open. Slightly grainy iPhone quality, no filter, shallow depth of field. Vertical 9:16. ";
+
+function buildPrompts(scenes, basePrompt) {
+  const nextPrompts = {};
+
+  scenes.forEach((scene) => {
+    if (scene.id === 1) {
+      nextPrompts[scene.id] = `${basePrompt}${scene.setting}. ${scene.emotion}.`;
+      return;
+    }
+
+    nextPrompts[scene.id] =
+      "Keep the exact same woman's face, features, hair color, eye color, and skin tone from the reference image. " +
+      `Change only her outfit and setting to: ${scene.setting}. ` +
+      `Expression: ${scene.emotion}. She is mid-sentence, mouth slightly open. ` +
+      "iPhone selfie, vertical 9:16, photorealistic.";
+  });
+
+  return nextPrompts;
+}
+
+function countRunAssets(run) {
+  return Object.values(run.assets || {}).reduce(
+    (totals, asset) => ({
+      images: asset?.image?.url ? totals.images + 1 : totals.images,
+      videos: asset?.video?.url ? totals.videos + 1 : totals.videos
+    }),
+    { images: 0, videos: 0 }
+  );
+}
+
+function readFileText(file) {
+  if (typeof file.text === "function") {
+    return file.text();
+  }
+
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("Unable to read file"));
+    reader.readAsText(file);
+  });
+}
 
 async function requestJson(path, options = {}) {
   const response = await fetch(`${PROXY}${path}`, options);
@@ -521,27 +570,21 @@ function SceneCard({
 }
 
 export default function App() {
+  const [scenes, setScenes] = useState(defaultScenes);
+  const [basePrompt, setBasePrompt] = useState(defaultBasePrompt);
   const [images, setImages] = useState({});
   const [videos, setVideos] = useState({});
+  const [runs, setRuns] = useState([]);
+  const [activeRunId, setActiveRunId] = useState(null);
+  const [expandedRunIds, setExpandedRunIds] = useState({});
   const [editSceneId, setEditSceneId] = useState(null);
-  const [prompts, setPrompts] = useState(() => {
-    const nextPrompts = {};
-
-    scenes.forEach((scene) => {
-      if (scene.id === 1) {
-        nextPrompts[scene.id] = `${basePrompt}${scene.setting}. ${scene.emotion}.`;
-      } else {
-        nextPrompts[scene.id] =
-          "Keep the exact same woman's face, features, hair color, eye color, and skin tone from the reference image. " +
-          `Change only her outfit and setting to: ${scene.setting}. ` +
-          `Expression: ${scene.emotion}. She is mid-sentence, mouth slightly open. ` +
-          "iPhone selfie, vertical 9:16, photorealistic.";
-      }
-    });
-
-    return nextPrompts;
-  });
+  const [importMessage, setImportMessage] = useState(null);
+  const [prompts, setPrompts] = useState(() =>
+    buildPrompts(defaultScenes, defaultBasePrompt)
+  );
   const timers = useRef({});
+  const fileInputRef = useRef(null);
+  const activeRunIdRef = useRef(null);
 
   const baseUrl = images[1]?.status === "approved" ? images[1].url : null;
   const approvedCount = Object.values(images).filter(
@@ -549,10 +592,103 @@ export default function App() {
   ).length;
   const allApproved = scenes.every((scene) => images[scene.id]?.status === "approved");
 
+  const clearAllTimers = useCallback(() => {
+    Object.values(timers.current).forEach(clearInterval);
+    timers.current = {};
+  }, []);
+
   useEffect(() => {
-    return () => {
-      Object.values(timers.current).forEach(clearInterval);
-    };
+    activeRunIdRef.current = activeRunId;
+  }, [activeRunId]);
+
+  useEffect(() => clearAllTimers, [clearAllTimers]);
+
+  const ensureActiveRun = useCallback(() => {
+    if (activeRunIdRef.current) {
+      return activeRunIdRef.current;
+    }
+
+    const runId = `run_${Date.now()}`;
+    const run = createRunRecord({
+      basePrompt,
+      scenes: scenes.map((scene) => ({ ...scene })),
+      now: new Date().toISOString(),
+      runId
+    });
+
+    activeRunIdRef.current = runId;
+    setActiveRunId(runId);
+    setRuns((current) => [run, ...current]);
+    setExpandedRunIds((current) => ({ ...current, [runId]: true }));
+    return runId;
+  }, [basePrompt, scenes]);
+
+  const updateRunAssets = useCallback(
+    (sceneId, assetPatch) => {
+      const runId = ensureActiveRun();
+
+      setRuns((current) =>
+        current.map((run) => (run.id === runId ? attachRunAsset(run, sceneId, assetPatch) : run))
+      );
+    },
+    [ensureActiveRun]
+  );
+
+  const exportRun = useCallback((run) => {
+    const payload = createRunExportPayload(run);
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: "application/json"
+    });
+    const objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+
+    link.href = objectUrl;
+    link.download = `${run.id}.json`;
+    link.click();
+    URL.revokeObjectURL(objectUrl);
+  }, []);
+
+  const handleScenesUpload = useCallback(
+    async (event) => {
+      const file = event.target.files?.[0];
+
+      if (!file) {
+        return;
+      }
+
+      try {
+        const nextPipeline = parsePipelineJson(await readFileText(file));
+
+        clearAllTimers();
+        activeRunIdRef.current = null;
+        setScenes(nextPipeline.scenes);
+        setBasePrompt(nextPipeline.basePrompt);
+        setPrompts(buildPrompts(nextPipeline.scenes, nextPipeline.basePrompt));
+        setImages({});
+        setVideos({});
+        setActiveRunId(null);
+        setEditSceneId(null);
+        setImportMessage({
+          type: "success",
+          text: `Loaded ${nextPipeline.scenes.length} scenes from ${file.name}`
+        });
+      } catch (error) {
+        setImportMessage({
+          type: "error",
+          text: error.message
+        });
+      } finally {
+        event.target.value = "";
+      }
+    },
+    [clearAllTimers]
+  );
+
+  const toggleRunExpanded = useCallback((runId) => {
+    setExpandedRunIds((current) => ({
+      ...current,
+      [runId]: !current[runId]
+    }));
   }, []);
 
   const pollTask = useCallback((sceneId, taskId, type) => {
@@ -594,6 +730,7 @@ export default function App() {
 
         if (taskOutcome === "success") {
           clearInterval(timers.current[timerKey]);
+          delete timers.current[timerKey];
           let assetUrl = parseResultUrl(result);
 
           if (type === "vid") {
@@ -604,6 +741,14 @@ export default function App() {
               // Keep the first successful video URL if 1080p retrieval fails.
             }
           }
+
+          updateRunAssets(sceneId, {
+            [type === "img" ? "image" : "video"]: {
+              url: assetUrl,
+              status: "success",
+              taskId
+            }
+          });
 
           updateState((current) => ({
             ...current,
@@ -619,6 +764,7 @@ export default function App() {
 
         if (taskOutcome === "fail" || taskOutcome === "failed") {
           clearInterval(timers.current[timerKey]);
+          delete timers.current[timerKey];
           updateState((current) => ({
             ...current,
             [sceneId]: {
@@ -630,6 +776,7 @@ export default function App() {
         }
       } catch (error) {
         clearInterval(timers.current[timerKey]);
+        delete timers.current[timerKey];
         updateState((current) => ({
           ...current,
           [sceneId]: {
@@ -640,10 +787,11 @@ export default function App() {
         }));
       }
     }, 5000);
-  }, []);
+  }, [updateRunAssets]);
 
   const generateImage = useCallback(
     async (sceneId) => {
+      ensureActiveRun();
       setImages((current) => ({ ...current, [sceneId]: { status: "generating" } }));
 
       try {
@@ -664,15 +812,25 @@ export default function App() {
         }));
       }
     },
-    [baseUrl, pollTask, prompts]
+    [baseUrl, ensureActiveRun, pollTask, prompts]
   );
 
-  const approveImage = useCallback((sceneId) => {
-    setImages((current) => ({
-      ...current,
-      [sceneId]: { ...current[sceneId], status: "approved" }
-    }));
-  }, []);
+  const approveImage = useCallback(
+    (sceneId) => {
+      setImages((current) => ({
+        ...current,
+        [sceneId]: { ...current[sceneId], status: "approved" }
+      }));
+
+      updateRunAssets(sceneId, {
+        image: {
+          ...(images[sceneId] || {}),
+          status: "approved"
+        }
+      });
+    },
+    [images, updateRunAssets]
+  );
 
   const generateVideo = useCallback(
     async (sceneId) => {
@@ -683,6 +841,7 @@ export default function App() {
         return;
       }
 
+      ensureActiveRun();
       setVideos((current) => ({ ...current, [sceneId]: { status: "generating" } }));
 
       try {
@@ -703,7 +862,7 @@ export default function App() {
         }));
       }
     },
-    [images, pollTask]
+    [ensureActiveRun, images, pollTask, scenes]
   );
 
   const generateAllRemaining = useCallback(() => {
@@ -906,6 +1065,37 @@ export default function App() {
           >
             {editSceneId ? "Hide Prompts" : "Edit Prompts"}
           </button>
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            style={buttonStyle("#58a6ff")}
+          >
+            Load Scenes JSON
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json,application/json"
+            aria-label="Upload Scenes JSON"
+            style={{ display: "none" }}
+            onChange={handleScenesUpload}
+          />
+
+          {importMessage && (
+            <div
+              style={{
+                marginTop: 12,
+                padding: "10px 12px",
+                borderRadius: 12,
+                background:
+                  importMessage.type === "success" ? "rgba(10, 61, 26, 0.45)" : "rgba(61, 10, 10, 0.45)",
+                color: importMessage.type === "success" ? "#7ee787" : "#ff9b9b",
+                fontSize: 12
+              }}
+            >
+              {importMessage.text}
+            </div>
+          )}
 
           {editSceneId && (
             <div style={{ marginTop: 14 }}>
@@ -959,6 +1149,175 @@ export default function App() {
               </div>
             </div>
           )}
+        </section>
+
+        <section
+          style={{
+            marginBottom: 18,
+            padding: 18,
+            borderRadius: 18,
+            border: "1px solid #242438",
+            background: "rgba(16, 16, 24, 0.72)"
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              gap: 16,
+              alignItems: "center",
+              marginBottom: 14,
+              flexWrap: "wrap"
+            }}
+          >
+            <div>
+              <h2 style={{ margin: 0, fontSize: 18, color: "#f5f7ff" }}>Asset Folders</h2>
+              <div style={{ fontSize: 12, color: "#8a8ca6", marginTop: 4 }}>
+                Every generation run stays here during this session and can be exported.
+              </div>
+            </div>
+            <div style={{ fontSize: 11, color: "#5f607a" }}>{runs.length} runs</div>
+          </div>
+
+          {runs.length === 0 && (
+            <div
+              style={{
+                padding: "12px 14px",
+                borderRadius: 12,
+                background: "#1a1a24",
+                color: "#7a7a92",
+                fontSize: 12
+              }}
+            >
+              No asset folders yet. Start generating to create your first run.
+            </div>
+          )}
+
+          <div style={{ display: "grid", gap: 12 }}>
+            {runs.map((run) => {
+              const counts = countRunAssets(run);
+              const isExpanded = expandedRunIds[run.id];
+
+              return (
+                <article
+                  key={run.id}
+                  style={{
+                    border: "1px solid #2a2a3e",
+                    borderRadius: 16,
+                    background: "rgba(20, 20, 30, 0.9)",
+                    padding: 14
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      gap: 12,
+                      alignItems: "center",
+                      flexWrap: "wrap"
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => toggleRunExpanded(run.id)}
+                      style={{
+                        ...buttonStyle("#d0d0e8"),
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 8
+                      }}
+                    >
+                      {run.name}
+                    </button>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                      <span style={{ fontSize: 11, color: "#8a8ca6" }}>
+                        {new Date(run.createdAt).toLocaleString()}
+                      </span>
+                      <span style={{ fontSize: 11, color: "#8a8ca6" }}>
+                        {run.scenes.length} scenes
+                      </span>
+                      <span style={{ fontSize: 11, color: "#8a8ca6" }}>
+                        {counts.images} images / {counts.videos} videos
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => exportRun(run)}
+                        style={buttonStyle("#58a6ff")}
+                      >
+                        Export Run
+                      </button>
+                    </div>
+                  </div>
+
+                  {isExpanded && (
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                        gap: 12,
+                        marginTop: 14
+                      }}
+                    >
+                      {run.scenes.map((scene) => {
+                        const asset = run.assets?.[scene.id];
+
+                        return (
+                          <section
+                            key={`${run.id}_${scene.id}`}
+                            style={{
+                              padding: 12,
+                              borderRadius: 12,
+                              background: "#151520",
+                              border: "1px solid #242438"
+                            }}
+                          >
+                            <div style={{ fontSize: 12, fontWeight: 700, color: "#f5f7ff" }}>
+                              {scene.label}
+                            </div>
+                            <div style={{ fontSize: 11, color: "#7a7a92", marginTop: 4 }}>
+                              Scene {scene.id}
+                            </div>
+
+                            {asset?.image?.url && (
+                              <img
+                                src={asset.image.url}
+                                alt={`${run.name} scene ${scene.id}`}
+                                style={{
+                                  width: "100%",
+                                  marginTop: 10,
+                                  borderRadius: 10,
+                                  display: "block"
+                                }}
+                              />
+                            )}
+
+                            {asset?.video?.url && (
+                              <video
+                                src={asset.video.url}
+                                controls
+                                style={{
+                                  width: "100%",
+                                  marginTop: 10,
+                                  borderRadius: 10,
+                                  display: "block"
+                                }}
+                              />
+                            )}
+
+                            {!asset?.image?.url && !asset?.video?.url && (
+                              <div style={{ fontSize: 11, color: "#5f607a", marginTop: 10 }}>
+                                No saved assets yet for this scene.
+                              </div>
+                            )}
+                          </section>
+                        );
+                      })}
+                    </div>
+                  )}
+                </article>
+              );
+            })}
+          </div>
         </section>
 
         <section
