@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getProxyUrl } from "./config.js";
+import {
+  getVeo1080pPath,
+  getVeoResultUrl,
+  getVeoTaskOutcome,
+  getVeoTaskStatusPath
+} from "./veo.js";
 
 const PROXY = getProxyUrl();
 const headers = { "Content-Type": "application/json" };
@@ -168,14 +174,14 @@ async function createVeo(prompt, imageUrls) {
 }
 
 async function getVeo1080p(taskId) {
-  const payload = await requestJson(`/api/v1/veo/1080p?taskId=${taskId}`, {
+  const payload = await requestJson(getVeo1080pPath(taskId), {
     headers
   });
   return payload?.data;
 }
 
 async function getVeoResult(taskId) {
-  const payload = await requestJson(`/api/v1/veo/details?taskId=${taskId}`, {
+  const payload = await requestJson(getVeoTaskStatusPath(taskId), {
     headers
   });
   return payload?.data;
@@ -184,6 +190,12 @@ async function getVeoResult(taskId) {
 function parseResultUrl(result) {
   if (!result) {
     return "";
+  }
+
+  const veoResultUrl = getVeoResultUrl(result);
+
+  if (veoResultUrl) {
+    return veoResultUrl;
   }
 
   if (result.videoUrl || result.resultUrl || result.imageUrl || result.url) {
@@ -575,9 +587,12 @@ export default function App() {
           return;
         }
 
-        const taskStatus = result.state || result.status;
+        const taskOutcome =
+          type === "vid"
+            ? getVeoTaskOutcome(result)
+            : result.state || result.status;
 
-        if (taskStatus === "success") {
+        if (taskOutcome === "success") {
           clearInterval(timers.current[timerKey]);
           let assetUrl = parseResultUrl(result);
 
@@ -602,7 +617,7 @@ export default function App() {
           return;
         }
 
-        if (taskStatus === "fail" || taskStatus === "failed") {
+        if (taskOutcome === "fail" || taskOutcome === "failed") {
           clearInterval(timers.current[timerKey]);
           updateState((current) => ({
             ...current,
