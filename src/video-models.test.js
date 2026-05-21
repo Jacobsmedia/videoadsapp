@@ -111,6 +111,40 @@ describe("video model helpers", () => {
     });
   });
 
+  it("forces sound on for Kling models that support a sound flag", () => {
+    expect(
+      createVideoGenerationRequest({
+        prompt: "Prompt",
+        imageUrl: "https://cdn.example.com/frame.png",
+        modelId: "kling-3.0/video",
+        durationSeconds: 12
+      })
+    ).toMatchObject({
+      body: {
+        input: {
+          sound: true
+        }
+      }
+    });
+  });
+
+  it("forces generate_audio on for Seedance models that support audio generation", () => {
+    expect(
+      createVideoGenerationRequest({
+        prompt: "Prompt",
+        imageUrl: "https://cdn.example.com/frame.png",
+        modelId: "bytedance/seedance-2",
+        durationSeconds: 15
+      })
+    ).toMatchObject({
+      body: {
+        input: {
+          generate_audio: true
+        }
+      }
+    });
+  });
+
   it("uses the selected scene length when building non-Veo generation payloads", () => {
     expect(
       createVideoGenerationRequest({

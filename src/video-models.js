@@ -10,6 +10,7 @@ function createModel(config) {
     supportedDurationSeconds: [8],
     defaultDurationSeconds: 8,
     durationStepSeconds: 1,
+    audioControl: null,
     ...config
   };
 }
@@ -36,6 +37,17 @@ function buildDurationRange(minDurationSeconds, maxDurationSeconds, durationStep
   return values;
 }
 
+function applyAudioControl(input, audioControl) {
+  if (!audioControl) {
+    return input;
+  }
+
+  return {
+    ...input,
+    [audioControl.field]: audioControl.value
+  };
+}
+
 export const VIDEO_MODEL_OPTIONS = [
   createModel({
     id: "veo3",
@@ -60,10 +72,10 @@ export const VIDEO_MODEL_OPTIONS = [
     api: "job",
     supportedDurationSeconds: [5],
     defaultDurationSeconds: 5,
+    audioControl: { field: "sound", value: true },
     buildInput: (prompt, imageUrl, durationSeconds) => ({
       prompt,
       image_urls: [imageUrl],
-      sound: false,
       duration: asStringDuration(durationSeconds)
     })
   }),
@@ -103,10 +115,10 @@ export const VIDEO_MODEL_OPTIONS = [
     maxDurationSeconds: 15,
     durationStepSeconds: 1,
     defaultDurationSeconds: 5,
+    audioControl: { field: "sound", value: true },
     buildInput: (prompt, imageUrl, durationSeconds) => ({
       prompt,
       image_urls: [imageUrl],
-      sound: false,
       duration: asStringDuration(durationSeconds),
       aspect_ratio: "9:16",
       mode: "pro",
@@ -165,13 +177,13 @@ export const VIDEO_MODEL_OPTIONS = [
     api: "job",
     supportedDurationSeconds: [8],
     defaultDurationSeconds: 8,
+    audioControl: { field: "generate_audio", value: true },
     buildInput: (prompt, imageUrl, durationSeconds) => ({
       prompt,
       input_urls: [imageUrl],
       aspect_ratio: "9:16",
       resolution: "720p",
       duration: asStringDuration(durationSeconds),
-      generate_audio: false,
       nsfw_checker: false
     })
   }),
@@ -182,10 +194,10 @@ export const VIDEO_MODEL_OPTIONS = [
     api: "job",
     supportedDurationSeconds: [15],
     defaultDurationSeconds: 15,
+    audioControl: { field: "generate_audio", value: true },
     buildInput: (prompt, imageUrl, durationSeconds) => ({
       prompt,
       first_frame_url: imageUrl,
-      generate_audio: false,
       resolution: "720p",
       aspect_ratio: "9:16",
       duration: asNumberDuration(durationSeconds)
@@ -198,10 +210,10 @@ export const VIDEO_MODEL_OPTIONS = [
     api: "job",
     supportedDurationSeconds: [15],
     defaultDurationSeconds: 15,
+    audioControl: { field: "generate_audio", value: true },
     buildInput: (prompt, imageUrl, durationSeconds) => ({
       prompt,
       first_frame_url: imageUrl,
-      generate_audio: false,
       resolution: "720p",
       aspect_ratio: "9:16",
       duration: asNumberDuration(durationSeconds)
@@ -341,12 +353,12 @@ export const VIDEO_MODEL_OPTIONS = [
     api: "job",
     supportedDurationSeconds: [5],
     defaultDurationSeconds: 5,
+    audioControl: { field: "audio", value: true },
     buildInput: (prompt, imageUrl, durationSeconds) => ({
       prompt,
       image_urls: [imageUrl],
       duration: asStringDuration(durationSeconds),
       resolution: "1080p",
-      audio: false,
       multi_shots: false,
       nsfw_checker: false
     })
@@ -484,7 +496,10 @@ export function createVideoGenerationRequest({
     endpoint: "/api/v1/jobs/createTask",
     body: {
       model: model.id,
-      input: model.buildInput(prompt, imageUrl, resolvedDuration)
+      input: applyAudioControl(
+        model.buildInput(prompt, imageUrl, resolvedDuration),
+        model.audioControl
+      )
     },
     durationSeconds: resolvedDuration,
     pollType: "vidJob"
