@@ -1,0 +1,199 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]:
+        - generic [ref=e7]: P
+        - generic [ref=e8]:
+          - generic [ref=e9]: IMAGE AND VIDEO PRODUCTION
+          - heading "NAD+ Ad Pipeline" [level=1] [ref=e10]
+          - paragraph [ref=e11]: Generate a base avatar, lock the face, spin up the remaining scenes, then send approved stills into Veo.
+      - generic [ref=e12]:
+        - generic [ref=e15]: S1
+        - generic [ref=e18]: S2
+        - generic [ref=e21]: S3
+        - generic [ref=e24]: S4
+        - generic [ref=e27]: S5
+        - generic [ref=e30]: S6
+      - button "1. Generate Base Avatar (S1)" [ref=e32] [cursor=pointer]
+      - generic [ref=e33]:
+        - generic [ref=e34]: Video Model
+        - combobox "Video model" [ref=e35]:
+          - option "Veo - Veo 3.1 Quality"
+          - option "Veo - Veo 3.1 Fast" [selected]
+          - option "Kling - Kling 2.6 Image to Video"
+          - option "Kling - Kling 2.5 Turbo Image to Video Pro"
+          - option "Kling - Kling V2.1 Master Image to Video"
+          - option "Bytedance - Bytedance V1 Pro Fast Image to Video"
+          - option "Bytedance - Bytedance V1 Pro Image to Video"
+          - option "Bytedance - Bytedance V1 Lite Image to Video"
+          - option "Bytedance - Bytedance Seedance 1.5 Pro"
+          - option "Bytedance - Bytedance Seedance 2.0"
+          - option "Bytedance - Bytedance Seedance 2.0 Fast"
+          - option "Hailuo - Hailuo Standard Image to Video"
+          - option "Hailuo - Hailuo Pro Image to Video"
+          - option "Hailuo - Hailuo 2.3 Standard Image to Video"
+          - option "Hailuo - Hailuo 2.3 Pro Image to Video"
+          - option "Sora2 - Sora2 Image to Video"
+          - option "Sora2 - Sora2 Pro Image to Video"
+          - option "Wan - Wan 2.2 A14B Image to Video Turbo"
+          - option "Wan - Wan 2.5 Image to Video"
+          - option "Wan - Wan 2.6 Image to Video"
+          - option "Wan - Wan 2.6 Flash Image to Video"
+          - option "Wan - Wan 2.7 Image to Video"
+          - option "Grok Imagine - Grok Imagine Image to Video"
+  - main [ref=e36]:
+    - generic [ref=e37]:
+      - button "Edit Prompts" [ref=e38] [cursor=pointer]
+      - button "Load Scenes JSON" [ref=e39] [cursor=pointer]
+    - generic [ref=e40]:
+      - generic [ref=e41]:
+        - generic [ref=e42]:
+          - heading "Asset Folders" [level=2] [ref=e43]
+          - generic [ref=e44]: Every generation run stays here during this session and can be exported.
+        - generic [ref=e45]: 0 runs
+      - generic [ref=e46]: No asset folders yet. Start generating to create your first run.
+    - generic [ref=e47]:
+      - generic [ref=e48]:
+        - generic [ref=e49]:
+          - generic [ref=e50]:
+            - generic [ref=e51]: Scene 1 - Base Avatar
+            - heading "Hook - Energetic Opening" [level=2] [ref=e52]
+          - generic [ref=e53]: READY
+        - paragraph [ref=e54]:
+          - strong [ref=e55]: "Setting:"
+          - text: Mint green tank top, sitting up on cream linen couch, bright sunlit modern living room
+        - paragraph [ref=e56]:
+          - strong [ref=e57]: "Emotion:"
+          - text: Energetic, confident, leaning toward camera
+        - blockquote [ref=e58]: "\"Calling all women over 40 who are tired of being told to just age gracefully...\""
+        - generic [ref=e59]:
+          - generic [ref=e60]: Video Production
+          - generic [ref=e61]:
+            - generic [ref=e62]: Veo - Veo 3.1 Fast
+            - generic [ref=e63]: Length
+            - combobox "Video length for scene 1" [ref=e64]:
+              - option "8s" [selected]
+            - generic [ref=e65]: Fixed for this model
+        - generic [ref=e66]: Approve this base avatar first so scenes 2-6 can reuse the same face.
+        - generic [ref=e67]:
+          - generic [ref=e68]: Avatar Image
+          - button "Generate Image" [ref=e70] [cursor=pointer]
+      - generic [ref=e71]:
+        - generic [ref=e72]:
+          - generic [ref=e73]:
+            - generic [ref=e74]: Scene 2
+            - heading "Problem - Vulnerable" [level=2] [ref=e75]
+          - generic [ref=e76]: WAITING S1
+        - paragraph [ref=e77]:
+          - strong [ref=e78]: "Setting:"
+          - text: White oversized t-shirt, lying in bed propped on pillows, soft morning window light
+        - paragraph [ref=e79]:
+          - strong [ref=e80]: "Emotion:"
+          - text: Vulnerable, reflective, slightly tired
+        - blockquote [ref=e81]: "\"I'm 47. For years I accepted the energy crashes, the brain fog, the slow recovery as just... getting older. Everyone said it was normal.\""
+        - generic [ref=e82]:
+          - generic [ref=e83]: Video Production
+          - generic [ref=e84]:
+            - generic [ref=e85]: Veo - Veo 3.1 Fast
+            - generic [ref=e86]: Length
+            - combobox "Video length for scene 2" [ref=e87]:
+              - option "8s" [selected]
+            - generic [ref=e88]: Fixed for this model
+        - generic [ref=e89]: Waiting for Scene 1 approval before generating this scene.
+        - generic [ref=e91]: Avatar Image
+      - generic [ref=e92]:
+        - generic [ref=e93]:
+          - generic [ref=e94]:
+            - generic [ref=e95]: Scene 3
+            - heading "Whisper - Secret Reveal" [level=2] [ref=e96]
+          - generic [ref=e97]: WAITING S1
+        - paragraph [ref=e98]:
+          - strong [ref=e99]: "Setting:"
+          - text: Cream silk slip top, reclined on beige couch with throw pillows, warm afternoon light, glass of water on side table
+        - paragraph [ref=e100]:
+          - strong [ref=e101]: "Emotion:"
+          - text: Intimate whisper, leaning close, conspiratorial
+        - blockquote [ref=e102]: "\"But here's what nobody tells you. Aging isn't inevitable. It's a treatable condition. And there's one molecule your cells run out of after 40 that changes everything.\""
+        - generic [ref=e103]:
+          - generic [ref=e104]: Video Production
+          - generic [ref=e105]:
+            - generic [ref=e106]: Veo - Veo 3.1 Fast
+            - generic [ref=e107]: Length
+            - combobox "Video length for scene 3" [ref=e108]:
+              - option "8s" [selected]
+            - generic [ref=e109]: Fixed for this model
+        - generic [ref=e110]: Waiting for Scene 1 approval before generating this scene.
+        - generic [ref=e112]: Avatar Image
+      - generic [ref=e113]:
+        - generic [ref=e114]:
+          - generic [ref=e115]:
+            - generic [ref=e116]: Scene 4
+            - heading "Credibility - Educational" [level=2] [ref=e117]
+          - generic [ref=e118]: WAITING S1
+        - paragraph [ref=e119]:
+          - strong [ref=e120]: "Setting:"
+          - text: Mint green tank top, sitting upright on cream couch, same room as scene 1, natural light
+        - paragraph [ref=e121]:
+          - strong [ref=e122]: "Emotion:"
+          - text: Confident, educational, engaged eye contact
+        - blockquote [ref=e123]: "\"It's called NAD+. Harvard's Dr. David Sinclair has spent 30 years studying it. By 60, you have half the NAD+ you had at 40 - that's what's actually aging you.\""
+        - generic [ref=e124]:
+          - generic [ref=e125]: Video Production
+          - generic [ref=e126]:
+            - generic [ref=e127]: Veo - Veo 3.1 Fast
+            - generic [ref=e128]: Length
+            - combobox "Video length for scene 4" [ref=e129]:
+              - option "8s" [selected]
+            - generic [ref=e130]: Fixed for this model
+        - generic [ref=e131]: Waiting for Scene 1 approval before generating this scene.
+        - generic [ref=e133]: Avatar Image
+      - generic [ref=e134]:
+        - generic [ref=e135]:
+          - generic [ref=e136]:
+            - generic [ref=e137]: Scene 5
+            - heading "Outcome - Excited" [level=2] [ref=e138]
+          - generic [ref=e139]: WAITING S1
+        - paragraph [ref=e140]:
+          - strong [ref=e141]: "Setting:"
+          - text: White t-shirt, sitting in bed propped on pillows, morning light, relaxed and happy
+        - paragraph [ref=e142]:
+          - strong [ref=e143]: "Emotion:"
+          - text: Excited, genuine smile, glowing confidence
+        - blockquote [ref=e144]: "\"Three weeks in, my energy is back. I sleep like I'm 30. My skin is clearer than it's been in a decade. And my husband can't keep his hands off me.\""
+        - generic [ref=e145]:
+          - generic [ref=e146]: Video Production
+          - generic [ref=e147]:
+            - generic [ref=e148]: Veo - Veo 3.1 Fast
+            - generic [ref=e149]: Length
+            - combobox "Video length for scene 5" [ref=e150]:
+              - option "8s" [selected]
+            - generic [ref=e151]: Fixed for this model
+        - generic [ref=e152]: Waiting for Scene 1 approval before generating this scene.
+        - generic [ref=e154]: Avatar Image
+      - generic [ref=e155]:
+        - generic [ref=e156]:
+          - generic [ref=e157]:
+            - generic [ref=e158]: Scene 6
+            - heading "CTA - Product Reveal" [level=2] [ref=e159]
+          - generic [ref=e160]: WAITING S1
+        - paragraph [ref=e161]:
+          - strong [ref=e162]: "Setting:"
+          - text: Mint green tank top, on couch, holding NAD+ injection vial in right hand, label facing camera
+        - paragraph [ref=e163]:
+          - strong [ref=e164]: "Emotion:"
+          - text: Calm confidence, small smile, product held up
+        - blockquote [ref=e165]: "\"From 99 dollars a month. Free consult, no insurance needed. Link below.\""
+        - generic [ref=e166]:
+          - generic [ref=e167]: Video Production
+          - generic [ref=e168]:
+            - generic [ref=e169]: Veo - Veo 3.1 Fast
+            - generic [ref=e170]: Length
+            - combobox "Video length for scene 6" [ref=e171]:
+              - option "8s" [selected]
+            - generic [ref=e172]: Fixed for this model
+        - generic [ref=e173]: Waiting for Scene 1 approval before generating this scene.
+        - generic [ref=e175]: Avatar Image
+  - contentinfo [ref=e176]:
+    - generic [ref=e177]:
+      - generic [ref=e178]: "Proxy: Cloudflare Worker - kie.ai | Images: Nano Banana 2K 9:16 | Videos: KIE selected model 9:16"
+      - generic [ref=e179]: 0/6 approved | https://kie-proxy.jacobsmedia12.workers.dev

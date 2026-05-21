@@ -19,6 +19,7 @@ describe("App", () => {
     expect(
       screen.getByRole("button", { name: /Generate Base Avatar/i })
     ).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: /video model/i })).toBeInTheDocument();
   });
 
   it("loads a valid scenes json file and replaces the visible pipeline", async () => {
@@ -35,7 +36,8 @@ describe("App", () => {
               setting: "Studio",
               dialogue: "New dialogue",
               emotion: "Direct",
-              vidPrompt: "She speaks to camera."
+              vidPrompt: "She speaks to camera.",
+              videoLengthSeconds: 10
             }
           ]
         })
@@ -54,6 +56,8 @@ describe("App", () => {
     });
 
     expect(screen.getByText(/loaded 1 scenes from scenes\.json/i)).toBeInTheDocument();
+    expect(screen.getByText(/requested 10s/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/video length for scene 1/i)).toHaveValue("8");
   });
 
   it("shows a validation error for an invalid upload and keeps the current scenes", async () => {
@@ -163,5 +167,82 @@ describe("App", () => {
     expect(createObjectURL).toHaveBeenCalled();
     expect(clickSpy).toHaveBeenCalled();
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:run-export");
+  });
+
+  it("shows completed KIE video assets in the scene after a non-Veo job finishes", async () => {
+    vi.useFakeTimers();
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ code: 200, data: { taskId: "img_task_1" } })
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          data: {
+            state: "success",
+            resultJson: JSON.stringify({ resultUrls: ["https://cdn.example.com/scene-1.png"] })
+          }
+        })
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ code: 200, data: { taskId: "video_task_1" } })
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          data: {
+            state: "success",
+            resultJson: JSON.stringify({
+              videos: [{ url: "https://cdn.example.com/scene-1.mp4" }]
+            })
+          }
+        })
+      });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { container } = render(<App />);
+
+    fireEvent.change(screen.getByRole("combobox", { name: /video model/i }), {
+      target: { value: "wan/2-6-image-to-video" }
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /generate base avatar/i }));
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /^approve$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /generate video/i }));
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(JSON.parse(fetchMock.mock.calls[2][1].body)).toMatchObject({
+      model: "wan/2-6-image-to-video",
+      input: {
+        duration: "5"
+      }
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(
+      container.querySelector('video[src="https://cdn.example.com/scene-1.mp4"]')
+    ).not.toBeNull();
   });
 });

@@ -7,6 +7,14 @@ import {
   createRunRecord
 } from "./runs.js";
 import {
+  createVideoGenerationRequest,
+  DEFAULT_VIDEO_MODEL_ID,
+  getSupportedVideoLengthSeconds,
+  getVideoModelById,
+  resolveVideoLengthForModel,
+  VIDEO_MODEL_OPTIONS
+} from "./video-models.js";
+import {
   getVeo1080pPath,
   getVeoResultUrl,
   getVeoTaskOutcome,
@@ -26,7 +34,8 @@ const defaultScenes = [
       "Calling all women over 40 who are tired of being told to just age gracefully...",
     emotion: "Energetic, confident, leaning toward camera",
     vidPrompt:
-      "She speaks with bold confident energy directly into the camera, eyes wide and expressive. She leans forward slightly, eyebrows raised on 'age gracefully'. Small head shake on 'tired'. Loose blonde hair shifts naturally. Handheld selfie, subtle sway. Clear natural voice with light room ambient."
+      "She speaks with bold confident energy directly into the camera, eyes wide and expressive. She leans forward slightly, eyebrows raised on 'age gracefully'. Small head shake on 'tired'. Loose blonde hair shifts naturally. Handheld selfie, subtle sway. Clear natural voice with light room ambient.",
+    videoLengthSeconds: 8
   },
   {
     id: 2,
@@ -37,7 +46,8 @@ const defaultScenes = [
       "I'm 47. For years I accepted the energy crashes, the brain fog, the slow recovery as just... getting older. Everyone said it was normal.",
     emotion: "Vulnerable, reflective, slightly tired",
     vidPrompt:
-      "She speaks softly, reflectively, looking into camera with a slight frown. Pauses after 'just...' with a small sigh. Eyes look down briefly then back up. Lying propped on white pillows. Handheld selfie from above, gentle sway. Clear soft voice with quiet bedroom ambient."
+      "She speaks softly, reflectively, looking into camera with a slight frown. Pauses after 'just...' with a small sigh. Eyes look down briefly then back up. Lying propped on white pillows. Handheld selfie from above, gentle sway. Clear soft voice with quiet bedroom ambient.",
+    videoLengthSeconds: 8
   },
   {
     id: 3,
@@ -48,7 +58,8 @@ const defaultScenes = [
       "But here's what nobody tells you. Aging isn't inevitable. It's a treatable condition. And there's one molecule your cells run out of after 40 that changes everything.",
     emotion: "Intimate whisper, leaning close, conspiratorial",
     vidPrompt:
-      "She whispers intimately to the camera, leaning in close. Voice drops to a soft whisper on 'here's what nobody tells you'. Eyes widen on 'treatable condition'. Small knowing nod on 'changes everything'. Very close framing. Minimal movement. Handheld selfie very close. Whispered voice with quiet ambient."
+      "She whispers intimately to the camera, leaning in close. Voice drops to a soft whisper on 'here's what nobody tells you'. Eyes widen on 'treatable condition'. Small knowing nod on 'changes everything'. Very close framing. Minimal movement. Handheld selfie very close. Whispered voice with quiet ambient.",
+    videoLengthSeconds: 8
   },
   {
     id: 4,
@@ -59,7 +70,8 @@ const defaultScenes = [
       "It's called NAD+. Harvard's Dr. David Sinclair has spent 30 years studying it. By 60, you have half the NAD+ you had at 40 - that's what's actually aging you.",
     emotion: "Confident, educational, engaged eye contact",
     vidPrompt:
-      "She speaks with confident educational energy, eye contact throughout. Gestures with left hand on 'Harvard' for emphasis. Nods on 'that's what's actually aging you'. Natural breathing, slight posture shifts. Sitting upright. Handheld selfie, subtle sway. Clear confident voice with light room ambient."
+      "She speaks with confident educational energy, eye contact throughout. Gestures with left hand on 'Harvard' for emphasis. Nods on 'that's what's actually aging you'. Natural breathing, slight posture shifts. Sitting upright. Handheld selfie, subtle sway. Clear confident voice with light room ambient.",
+    videoLengthSeconds: 8
   },
   {
     id: 5,
@@ -70,7 +82,8 @@ const defaultScenes = [
       "Three weeks in, my energy is back. I sleep like I'm 30. My skin is clearer than it's been in a decade. And my husband can't keep his hands off me.",
     emotion: "Excited, genuine smile, glowing confidence",
     vidPrompt:
-      "She speaks with growing excitement, genuine wide smile. Touches her face briefly on 'my skin'. Laughs lightly on 'can't keep his hands off me'. Eyes bright and sparkling. Sitting in bed, relaxed. Handheld selfie, subtle sway. Clear happy voice with light ambient."
+      "She speaks with growing excitement, genuine wide smile. Touches her face briefly on 'my skin'. Laughs lightly on 'can't keep his hands off me'. Eyes bright and sparkling. Sitting in bed, relaxed. Handheld selfie, subtle sway. Clear happy voice with light ambient.",
+    videoLengthSeconds: 8
   },
   {
     id: 6,
@@ -81,7 +94,8 @@ const defaultScenes = [
       "From 99 dollars a month. Free consult, no insurance needed. Link below.",
     emotion: "Calm confidence, small smile, product held up",
     vidPrompt:
-      "She speaks with calm closing confidence, holding NAD+ vial at chest height. Lifts vial toward camera midway and tilts label so it's readable, holds elevated for final 3 seconds. Small genuine smile. Subtle nod at the end. Handheld selfie, subtle sway. Clear voice with light ambient."
+      "She speaks with calm closing confidence, holding NAD+ vial at chest height. Lifts vial toward camera midway and tilts label so it's readable, holds elevated for final 3 seconds. Small genuine smile. Subtle nod at the end. Handheld selfie, subtle sway. Clear voice with light ambient.",
+    videoLengthSeconds: 8
   }
 ];
 
@@ -129,6 +143,27 @@ function readFileText(file) {
     reader.onerror = () => reject(new Error("Unable to read file"));
     reader.readAsText(file);
   });
+}
+
+function normalizeScenesForVideoModel(scenes, modelId) {
+  const warnings = {};
+  const nextScenes = scenes.map((scene) => {
+    const resolution = resolveVideoLengthForModel({
+      modelId,
+      requestedSeconds: scene.videoLengthSeconds
+    });
+
+    if (resolution.warning) {
+      warnings[scene.id] = resolution.warning;
+    }
+
+    return {
+      ...scene,
+      videoLengthSeconds: resolution.seconds
+    };
+  });
+
+  return { scenes: nextScenes, warnings };
 }
 
 async function requestJson(path, options = {}) {
@@ -194,10 +229,10 @@ async function getTaskResult(taskId) {
   return payload?.data;
 }
 
-async function createVeo(prompt, imageUrls) {
+async function createVeo(prompt, imageUrls, model = "veo3_fast") {
   const body = {
     prompt,
-    model: "veo3_fast",
+    model,
     aspect_ratio: "9:16",
     enableTranslation: false
   };
@@ -222,6 +257,20 @@ async function createVeo(prompt, imageUrls) {
   return payload.data.taskId;
 }
 
+async function createJobTask(body) {
+  const payload = await requestJson("/api/v1/jobs/createTask", {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body)
+  });
+
+  if (payload?.code !== 200 || !payload?.data?.taskId) {
+    throw new Error(payload?.msg || "Video generation failed");
+  }
+
+  return payload.data.taskId;
+}
+
 async function getVeo1080p(taskId) {
   const payload = await requestJson(getVeo1080pPath(taskId), {
     headers
@@ -236,6 +285,71 @@ async function getVeoResult(taskId) {
   return payload?.data;
 }
 
+function extractAssetUrl(value) {
+  if (!value) {
+    return "";
+  }
+
+  if (typeof value === "string" && /^https?:\/\//i.test(value)) {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const nestedUrl = extractAssetUrl(item);
+
+      if (nestedUrl) {
+        return nestedUrl;
+      }
+    }
+
+    return "";
+  }
+
+  if (typeof value !== "object") {
+    return "";
+  }
+
+  const directKeys = [
+    "videoUrl",
+    "video_url",
+    "resultUrl",
+    "outputUrl",
+    "output_url",
+    "imageUrl",
+    "image_url",
+    "url"
+  ];
+
+  for (const key of directKeys) {
+    const nestedUrl = extractAssetUrl(value[key]);
+
+    if (nestedUrl) {
+      return nestedUrl;
+    }
+  }
+
+  const collectionKeys = [
+    "resultUrls",
+    "videoUrls",
+    "video_urls",
+    "videos",
+    "images",
+    "outputs",
+    "data"
+  ];
+
+  for (const key of collectionKeys) {
+    const nestedUrl = extractAssetUrl(value[key]);
+
+    if (nestedUrl) {
+      return nestedUrl;
+    }
+  }
+
+  return "";
+}
+
 function parseResultUrl(result) {
   if (!result) {
     return "";
@@ -247,8 +361,10 @@ function parseResultUrl(result) {
     return veoResultUrl;
   }
 
-  if (result.videoUrl || result.resultUrl || result.imageUrl || result.url) {
-    return result.videoUrl || result.resultUrl || result.imageUrl || result.url;
+  const directUrl = extractAssetUrl(result);
+
+  if (directUrl) {
+    return directUrl;
   }
 
   if (!result.resultJson) {
@@ -261,13 +377,7 @@ function parseResultUrl(result) {
         ? JSON.parse(result.resultJson)
         : result.resultJson;
 
-    return (
-      parsed?.resultUrls?.[0] ||
-      parsed?.videoUrl ||
-      parsed?.imageUrl ||
-      parsed?.url ||
-      ""
-    );
+    return extractAssetUrl(parsed);
   } catch {
     return "";
   }
@@ -335,6 +445,9 @@ function SceneCard({
   imageState,
   videoState,
   baseUrl,
+  videoModelId,
+  videoLengthWarning,
+  onChangeVideoLength,
   onGenerateImage,
   onApproveImage,
   onRegenerateImage,
@@ -343,6 +456,8 @@ function SceneCard({
   const isBaseScene = scene.id === 1;
   const waitingForBase = !isBaseScene && !baseUrl;
   const status = waitingForBase ? "locked" : imageState?.status || "idle";
+  const selectedModel = getVideoModelById(videoModelId);
+  const supportedLengths = getSupportedVideoLengthSeconds(videoModelId);
 
   return (
     <section
@@ -411,6 +526,69 @@ function SceneCard({
       >
         "{scene.dialogue}"
       </blockquote>
+
+      <div
+        style={{
+          marginBottom: 16,
+          padding: "12px 14px",
+          background: "#161624",
+          border: "1px solid #242438",
+          borderRadius: 12
+        }}
+      >
+        <div
+          style={{
+            fontSize: 10,
+            fontWeight: 700,
+            color: "#6d6d88",
+            letterSpacing: 1,
+            textTransform: "uppercase",
+            marginBottom: 8
+          }}
+        >
+          Video Production
+        </div>
+
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+          <span style={{ fontSize: 12, color: "#9fa4c6" }}>
+            {selectedModel.provider} - {selectedModel.label}
+          </span>
+          <label
+            htmlFor={`scene-video-length-${scene.id}`}
+            style={{ fontSize: 12, color: "#d2d2e8", fontWeight: 700 }}
+          >
+            Length
+          </label>
+          <select
+            id={`scene-video-length-${scene.id}`}
+            aria-label={`Video length for scene ${scene.id}`}
+            value={String(scene.videoLengthSeconds)}
+            onChange={(event) => onChangeVideoLength(scene.id, Number(event.target.value))}
+            style={{
+              minWidth: 90,
+              padding: "8px 12px",
+              borderRadius: 10,
+              border: "1px solid #2a2a3e",
+              background: "#141420",
+              color: "#e8e8f0",
+              fontSize: 12
+            }}
+          >
+            {supportedLengths.map((seconds) => (
+              <option key={seconds} value={seconds}>
+                {seconds}s
+              </option>
+            ))}
+          </select>
+          {supportedLengths.length === 1 && (
+            <span style={{ fontSize: 11, color: "#7a7a92" }}>Fixed for this model</span>
+          )}
+        </div>
+
+        {videoLengthWarning && (
+          <div style={{ fontSize: 11, color: "#ffcb52", marginTop: 8 }}>{videoLengthWarning}</div>
+        )}
+      </div>
 
       {isBaseScene && !baseUrl && (
         <div
@@ -528,10 +706,14 @@ function SceneCard({
               color: "#6d6d88",
               letterSpacing: 1,
               textTransform: "uppercase",
-              marginBottom: 8
-            }}
-          >
-            Video - Veo 3.1
+            marginBottom: 8
+          }}
+        >
+          Video Output
+        </div>
+
+          <div style={{ fontSize: 11, color: "#7a7a92", marginBottom: 8 }}>
+            Sending {scene.videoLengthSeconds}s to {selectedModel.provider} {selectedModel.label}
           </div>
 
           {videoState?.status && <StatusBadge status={videoState.status} />}
@@ -570,17 +752,26 @@ function SceneCard({
 }
 
 export default function App() {
-  const [scenes, setScenes] = useState(defaultScenes);
+  const [scenes, setScenes] = useState(() =>
+    normalizeScenesForVideoModel(defaultScenes, DEFAULT_VIDEO_MODEL_ID).scenes
+  );
   const [basePrompt, setBasePrompt] = useState(defaultBasePrompt);
   const [images, setImages] = useState({});
   const [videos, setVideos] = useState({});
+  const [videoModelId, setVideoModelId] = useState(DEFAULT_VIDEO_MODEL_ID);
+  const [videoLengthWarnings, setVideoLengthWarnings] = useState(() =>
+    normalizeScenesForVideoModel(defaultScenes, DEFAULT_VIDEO_MODEL_ID).warnings
+  );
   const [runs, setRuns] = useState([]);
   const [activeRunId, setActiveRunId] = useState(null);
   const [expandedRunIds, setExpandedRunIds] = useState({});
   const [editSceneId, setEditSceneId] = useState(null);
   const [importMessage, setImportMessage] = useState(null);
   const [prompts, setPrompts] = useState(() =>
-    buildPrompts(defaultScenes, defaultBasePrompt)
+    buildPrompts(
+      normalizeScenesForVideoModel(defaultScenes, DEFAULT_VIDEO_MODEL_ID).scenes,
+      defaultBasePrompt
+    )
   );
   const timers = useRef({});
   const fileInputRef = useRef(null);
@@ -600,6 +791,18 @@ export default function App() {
   useEffect(() => {
     activeRunIdRef.current = activeRunId;
   }, [activeRunId]);
+
+  useEffect(() => {
+    if (!activeRunId) {
+      return;
+    }
+
+    setRuns((current) =>
+      current.map((run) =>
+        run.id === activeRunId ? { ...run, scenes: scenes.map((scene) => ({ ...scene })) } : run
+      )
+    );
+  }, [activeRunId, scenes]);
 
   useEffect(() => clearAllTimers, [clearAllTimers]);
 
@@ -657,17 +860,22 @@ export default function App() {
       }
 
       try {
-        const nextPipeline = parsePipelineJson(await readFileText(file));
+        const uploadedPipeline = parsePipelineJson(await readFileText(file));
+        const nextPipeline = normalizeScenesForVideoModel(
+          uploadedPipeline.scenes,
+          videoModelId
+        );
 
         clearAllTimers();
         activeRunIdRef.current = null;
         setScenes(nextPipeline.scenes);
-        setBasePrompt(nextPipeline.basePrompt);
-        setPrompts(buildPrompts(nextPipeline.scenes, nextPipeline.basePrompt));
+        setBasePrompt(uploadedPipeline.basePrompt);
+        setPrompts(buildPrompts(nextPipeline.scenes, uploadedPipeline.basePrompt));
         setImages({});
         setVideos({});
         setActiveRunId(null);
         setEditSceneId(null);
+        setVideoLengthWarnings(nextPipeline.warnings);
         setImportMessage({
           type: "success",
           text: `Loaded ${nextPipeline.scenes.length} scenes from ${file.name}`
@@ -681,8 +889,32 @@ export default function App() {
         event.target.value = "";
       }
     },
-    [clearAllTimers]
+    [clearAllTimers, videoModelId]
   );
+
+  const handleVideoModelChange = useCallback((nextModelId) => {
+    setVideoModelId(nextModelId);
+    setScenes((current) => {
+      const nextResolution = normalizeScenesForVideoModel(current, nextModelId);
+
+      setVideoLengthWarnings(nextResolution.warnings);
+      return nextResolution.scenes;
+    });
+  }, []);
+
+  const handleSceneVideoLengthChange = useCallback((sceneId, nextSeconds) => {
+    setScenes((current) =>
+      current.map((scene) =>
+        scene.id === sceneId ? { ...scene, videoLengthSeconds: nextSeconds } : scene
+      )
+    );
+    setVideoLengthWarnings((current) => {
+      const nextWarnings = { ...current };
+
+      delete nextWarnings[sceneId];
+      return nextWarnings;
+    });
+  }, []);
 
   const toggleRunExpanded = useCallback((runId) => {
     setExpandedRunIds((current) => ({
@@ -717,14 +949,16 @@ export default function App() {
 
       try {
         const result =
-          type === "img" ? await getTaskResult(taskId) : await getVeoResult(taskId);
+          type === "img" || type === "vidJob"
+            ? await getTaskResult(taskId)
+            : await getVeoResult(taskId);
 
         if (!result) {
           return;
         }
 
         const taskOutcome =
-          type === "vid"
+          type === "vidVeo"
             ? getVeoTaskOutcome(result)
             : result.state || result.status;
 
@@ -733,13 +967,25 @@ export default function App() {
           delete timers.current[timerKey];
           let assetUrl = parseResultUrl(result);
 
-          if (type === "vid") {
+          if (type === "vidVeo") {
             try {
               const hdResult = await getVeo1080p(taskId);
               assetUrl = parseResultUrl(hdResult) || assetUrl;
             } catch {
               // Keep the first successful video URL if 1080p retrieval fails.
             }
+          }
+
+          if (!assetUrl) {
+            updateState((current) => ({
+              ...current,
+              [sceneId]: {
+                ...current[sceneId],
+                status: "fail",
+                error: "Task completed but no asset URL was returned"
+              }
+            }));
+            return;
           }
 
           updateRunAssets(sceneId, {
@@ -845,16 +1091,31 @@ export default function App() {
       setVideos((current) => ({ ...current, [sceneId]: { status: "generating" } }));
 
       try {
+        const videoLengthSeconds = scene.videoLengthSeconds;
         const prompt =
-          `Vertical 9:16, 8 seconds, photorealistic UGC selfie video, iPhone front camera. ` +
+          `Vertical 9:16, ${videoLengthSeconds} seconds, photorealistic UGC selfie video, iPhone front camera. ` +
           `Match the woman from the reference image exactly. She says: "${scene.dialogue}" ${scene.vidPrompt}`;
-        const taskId = await createVeo(prompt, [imageUrl]);
+        const request = createVideoGenerationRequest({
+          prompt,
+          imageUrl,
+          modelId: videoModelId,
+          durationSeconds: videoLengthSeconds
+        });
+        const taskId =
+          request.type === "veo"
+            ? await createVeo(prompt, [imageUrl], request.body.model)
+            : await createJobTask(request.body);
 
         setVideos((current) => ({
           ...current,
-          [sceneId]: { status: "polling", taskId }
+          [sceneId]: {
+            status: "polling",
+            taskId,
+            modelId: videoModelId,
+            videoLengthSeconds: request.durationSeconds
+          }
         }));
-        pollTask(sceneId, taskId, "vid");
+        pollTask(sceneId, taskId, request.pollType);
       } catch (error) {
         setVideos((current) => ({
           ...current,
@@ -862,7 +1123,7 @@ export default function App() {
         }));
       }
     },
-    [ensureActiveRun, images, pollTask, scenes]
+    [ensureActiveRun, images, pollTask, scenes, videoModelId]
   );
 
   const generateAllRemaining = useCallback(() => {
@@ -1044,6 +1305,49 @@ export default function App() {
                 3. Generate All Videos
               </button>
             )}
+          </div>
+
+          <div
+            style={{
+              marginTop: 14,
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 10,
+              alignItems: "center"
+            }}
+          >
+            <label
+              htmlFor="video-model-select"
+              style={{
+                fontSize: 12,
+                color: "#9fa4c6",
+                fontWeight: 700,
+                letterSpacing: 0.2
+              }}
+            >
+              Video Model
+            </label>
+            <select
+              id="video-model-select"
+              aria-label="Video model"
+              value={videoModelId}
+              onChange={(event) => handleVideoModelChange(event.target.value)}
+              style={{
+                minWidth: 280,
+                padding: "8px 12px",
+                borderRadius: 10,
+                border: "1px solid #2a2a3e",
+                background: "#141420",
+                color: "#e8e8f0",
+                fontSize: 12
+              }}
+            >
+              {VIDEO_MODEL_OPTIONS.map((model) => (
+                <option key={model.id} value={model.id}>
+                  {model.provider} - {model.label}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
       </header>
@@ -1334,6 +1638,9 @@ export default function App() {
               imageState={images[scene.id]}
               videoState={videos[scene.id]}
               baseUrl={baseUrl}
+              videoModelId={videoModelId}
+              videoLengthWarning={videoLengthWarnings[scene.id]}
+              onChangeVideoLength={handleSceneVideoLengthChange}
               onGenerateImage={generateImage}
               onApproveImage={approveImage}
               onRegenerateImage={generateImage}
@@ -1362,8 +1669,8 @@ export default function App() {
           }}
         >
           <span>
-            Proxy: Cloudflare Worker - kie.ai | Images: NB2 2K 9:16 | Videos:
-            Veo 3.1 1080p 9:16
+            Proxy: Cloudflare Worker - kie.ai | Images: Nano Banana 2K 9:16 |
+            Videos: KIE selected model 9:16
           </span>
           <span>
             {approvedCount}/{scenes.length} approved | {PROXY}

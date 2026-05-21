@@ -7,6 +7,10 @@ const REQUIRED_SCENE_FIELDS = {
   vidPrompt: "string"
 };
 
+const OPTIONAL_SCENE_FIELDS = {
+  videoLengthSeconds: "number"
+};
+
 export function parsePipelineJson(sourceText) {
   let parsed;
 
@@ -45,13 +49,22 @@ export function parsePipelineJson(sourceText) {
       }
     }
 
+    for (const [field, expectedType] of Object.entries(OPTIONAL_SCENE_FIELDS)) {
+      if (field in scene && typeof scene[field] !== expectedType) {
+        throw new Error(`Scene ${sceneNumber} field "${field}" must be a ${expectedType}`);
+      }
+    }
+
     return {
       id: scene.id,
       label: scene.label,
       setting: scene.setting,
       dialogue: scene.dialogue,
       emotion: scene.emotion,
-      vidPrompt: scene.vidPrompt
+      vidPrompt: scene.vidPrompt,
+      ...(scene.videoLengthSeconds !== undefined
+        ? { videoLengthSeconds: scene.videoLengthSeconds }
+        : {})
     };
   });
 

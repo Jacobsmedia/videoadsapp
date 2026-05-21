@@ -12,7 +12,8 @@ describe("parsePipelineJson", () => {
           setting: "Living room",
           dialogue: "Hello",
           emotion: "Confident",
-          vidPrompt: "She speaks directly to camera."
+          vidPrompt: "She speaks directly to camera.",
+          videoLengthSeconds: 8
         }
       ]
     });
@@ -26,7 +27,8 @@ describe("parsePipelineJson", () => {
           setting: "Living room",
           dialogue: "Hello",
           emotion: "Confident",
-          vidPrompt: "She speaks directly to camera."
+          vidPrompt: "She speaks directly to camera.",
+          videoLengthSeconds: 8
         }
       ]
     });
@@ -77,5 +79,26 @@ describe("parsePipelineJson", () => {
         })
       )
     ).toThrow('Scene 1 field "id" must be a number');
+  });
+
+  it("throws when videoLengthSeconds has the wrong type", () => {
+    expect(() =>
+      parsePipelineJson(
+        JSON.stringify({
+          basePrompt: "Prompt",
+          scenes: [
+            {
+              id: 1,
+              label: "Hook",
+              setting: "Room",
+              dialogue: "Hi",
+              emotion: "Warm",
+              vidPrompt: "Prompt",
+              videoLengthSeconds: "8"
+            }
+          ]
+        })
+      )
+    ).toThrow('Scene 1 field "videoLengthSeconds" must be a number');
   });
 });
