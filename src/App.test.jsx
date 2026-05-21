@@ -60,6 +60,51 @@ describe("App", () => {
     expect(screen.getByLabelText(/video length for scene 1/i)).toHaveValue("8");
   });
 
+  it("shows a scrollable range of length options for Kling 3.0 and keeps a valid imported value", async () => {
+    render(<App />);
+
+    fireEvent.change(screen.getByRole("combobox", { name: /video model/i }), {
+      target: { value: "kling-3.0/video" }
+    });
+
+    const file = new File(
+      [
+        JSON.stringify({
+          basePrompt: "Uploaded base prompt",
+          scenes: [
+            {
+              id: 1,
+              label: "Uploaded Hook",
+              setting: "Studio",
+              dialogue: "New dialogue",
+              emotion: "Direct",
+              vidPrompt: "She speaks to camera.",
+              videoLengthSeconds: 12
+            }
+          ]
+        })
+      ],
+      "kling-scenes.json",
+      { type: "application/json" }
+    );
+
+    fireEvent.click(screen.getByText(/load scenes json/i));
+    fireEvent.change(screen.getByLabelText(/upload scenes json/i), {
+      target: { files: [file] }
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Uploaded Hook")).toBeInTheDocument();
+    });
+
+    const lengthSelect = screen.getByLabelText(/video length for scene 1/i);
+
+    expect(lengthSelect).toHaveValue("12");
+    expect(screen.queryByText(/requested 12s/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "3s" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "15s" })).toBeInTheDocument();
+  });
+
   it("shows a validation error for an invalid upload and keeps the current scenes", async () => {
     render(<App />);
 

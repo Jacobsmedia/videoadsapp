@@ -583,6 +583,11 @@ function SceneCard({
           {supportedLengths.length === 1 && (
             <span style={{ fontSize: 11, color: "#7a7a92" }}>Fixed for this model</span>
           )}
+          {selectedModel.durationType === "range" && supportedLengths.length > 1 && (
+            <span style={{ fontSize: 11, color: "#7a7a92" }}>
+              {supportedLengths[0]}s-{supportedLengths[supportedLengths.length - 1]}s available
+            </span>
+          )}
         </div>
 
         {videoLengthWarning && (

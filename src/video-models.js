@@ -1,9 +1,15 @@
 export const DEFAULT_VIDEO_MODEL_ID = "veo3_fast";
 
 function createModel(config) {
+  const durationType =
+    config.durationType ||
+    (config.minDurationSeconds !== undefined ? "range" : "discrete");
+
   return {
+    durationType,
     supportedDurationSeconds: [8],
     defaultDurationSeconds: 8,
+    durationStepSeconds: 1,
     ...config
   };
 }
@@ -14,6 +20,20 @@ function asStringDuration(durationSeconds) {
 
 function asNumberDuration(durationSeconds) {
   return durationSeconds;
+}
+
+function buildDurationRange(minDurationSeconds, maxDurationSeconds, durationStepSeconds = 1) {
+  const values = [];
+
+  for (
+    let seconds = minDurationSeconds;
+    seconds <= maxDurationSeconds;
+    seconds += durationStepSeconds
+  ) {
+    values.push(seconds);
+  }
+
+  return values;
 }
 
 export const VIDEO_MODEL_OPTIONS = [
@@ -71,6 +91,26 @@ export const VIDEO_MODEL_OPTIONS = [
       prompt,
       image_url: imageUrl,
       duration: asStringDuration(durationSeconds)
+    })
+  }),
+  createModel({
+    id: "kling-3.0/video",
+    label: "Kling 3.0 Video",
+    provider: "Kling",
+    api: "job",
+    durationType: "range",
+    minDurationSeconds: 3,
+    maxDurationSeconds: 15,
+    durationStepSeconds: 1,
+    defaultDurationSeconds: 5,
+    buildInput: (prompt, imageUrl, durationSeconds) => ({
+      prompt,
+      image_urls: [imageUrl],
+      sound: false,
+      duration: asStringDuration(durationSeconds),
+      aspect_ratio: "9:16",
+      mode: "pro",
+      multi_shots: false
     })
   }),
   createModel({
@@ -350,7 +390,17 @@ export function getVideoModelById(modelId) {
 }
 
 export function getSupportedVideoLengthSeconds(modelId) {
-  return [...getVideoModelById(modelId).supportedDurationSeconds];
+  const model = getVideoModelById(modelId);
+
+  if (model.durationType === "range") {
+    return buildDurationRange(
+      model.minDurationSeconds,
+      model.maxDurationSeconds,
+      model.durationStepSeconds
+    );
+  }
+
+  return [...model.supportedDurationSeconds];
 }
 
 export function getDefaultVideoLengthSeconds(modelId) {
@@ -363,7 +413,7 @@ function formatSupportedSeconds(secondsList) {
 
 export function resolveVideoLengthForModel({ modelId, requestedSeconds }) {
   const model = getVideoModelById(modelId);
-  const supportedSeconds = model.supportedDurationSeconds;
+  const supportedSeconds = getSupportedVideoLengthSeconds(model.id);
   const defaultSeconds = model.defaultDurationSeconds;
 
   if (
@@ -374,6 +424,19 @@ export function resolveVideoLengthForModel({ modelId, requestedSeconds }) {
     return {
       seconds: requestedSeconds ?? defaultSeconds,
       warning: null
+    };
+  }
+
+  if (model.durationType === "range") {
+    const minSeconds = supportedSeconds[0];
+    const maxSeconds = supportedSeconds[supportedSeconds.length - 1];
+    const clampedSeconds = Math.min(Math.max(requestedSeconds, minSeconds), maxSeconds);
+
+    return {
+      seconds: clampedSeconds,
+      warning:
+        `Requested ${requestedSeconds}s, but ${model.provider} ${model.label} supports ` +
+        `${minSeconds}s-${maxSeconds}s. Using ${clampedSeconds}s instead.`
     };
   }
 
