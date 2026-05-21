@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getProxyUrl } from "./config.js";
 import { parsePipelineJson } from "./pipeline-import.js";
+import { VideoEditor } from "./VideoEditor.jsx";
 import {
   attachRunAsset,
   createRunExportPayload,
@@ -447,6 +448,7 @@ function SceneCard({
   baseUrl,
   videoModelId,
   videoLengthWarning,
+  proposedVideoLength,
   onChangeVideoLength,
   onGenerateImage,
   onApproveImage,
@@ -549,44 +551,112 @@ function SceneCard({
           Video Production
         </div>
 
-        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+        <div style={{ marginBottom: 6 }}>
           <span style={{ fontSize: 12, color: "#9fa4c6" }}>
-            {selectedModel.provider} - {selectedModel.label}
+            {selectedModel.provider} — {selectedModel.label}
           </span>
-          <label
-            htmlFor={`scene-video-length-${scene.id}`}
-            style={{ fontSize: 12, color: "#d2d2e8", fontWeight: 700 }}
-          >
-            Length
-          </label>
-          <select
-            id={`scene-video-length-${scene.id}`}
-            aria-label={`Video length for scene ${scene.id}`}
-            value={String(scene.videoLengthSeconds)}
-            onChange={(event) => onChangeVideoLength(scene.id, Number(event.target.value))}
+        </div>
+
+        {/* Proposed length badge */}
+        {proposedVideoLength !== undefined && (
+          <div
             style={{
-              minWidth: 90,
-              padding: "8px 12px",
-              borderRadius: 10,
-              border: "1px solid #2a2a3e",
-              background: "#141420",
-              color: "#e8e8f0",
-              fontSize: 12
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              marginBottom: 10,
+              padding: "6px 10px",
+              background: "rgba(88,166,255,0.08)",
+              border: "1px solid rgba(88,166,255,0.22)",
+              borderRadius: 8,
+              fontSize: 11
             }}
           >
-            {supportedLengths.map((seconds) => (
-              <option key={seconds} value={seconds}>
-                {seconds}s
-              </option>
-            ))}
-          </select>
+            <span style={{ color: "#58a6ff", fontWeight: 700 }}>Script suggests:</span>
+            <span style={{ color: "#d2d2e8" }}>{proposedVideoLength}s</span>
+            {scene.videoLengthSeconds !== proposedVideoLength && (
+              <button
+                type="button"
+                onClick={() => onChangeVideoLength(scene.id, proposedVideoLength)}
+                style={{
+                  marginLeft: 4,
+                  padding: "2px 8px",
+                  borderRadius: 6,
+                  border: "1px solid #58a6ff",
+                  background: "transparent",
+                  color: "#58a6ff",
+                  fontSize: 10,
+                  cursor: "pointer",
+                  fontWeight: 700
+                }}
+              >
+                Use
+              </button>
+            )}
+            {scene.videoLengthSeconds === proposedVideoLength && (
+              <span style={{ color: "#34d058", fontWeight: 700 }}>✓ Applied</span>
+            )}
+          </div>
+        )}
+
+        {/* Length selector */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <span style={{ fontSize: 12, color: "#d2d2e8", fontWeight: 700 }}>
+            Length: <span style={{ color: "#a855f7" }}>{scene.videoLengthSeconds}s</span>
+          </span>
+
           {supportedLengths.length === 1 && (
-            <span style={{ fontSize: 11, color: "#7a7a92" }}>Fixed for this model</span>
-          )}
-          {selectedModel.durationType === "range" && supportedLengths.length > 1 && (
             <span style={{ fontSize: 11, color: "#7a7a92" }}>
-              {supportedLengths[0]}s-{supportedLengths[supportedLengths.length - 1]}s available
+              Fixed at {supportedLengths[0]}s for this model
             </span>
+          )}
+
+          {supportedLengths.length > 1 && supportedLengths.length <= 8 && (
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {supportedLengths.map((seconds) => (
+                <button
+                  key={seconds}
+                  type="button"
+                  aria-pressed={scene.videoLengthSeconds === seconds}
+                  onClick={() => onChangeVideoLength(scene.id, seconds)}
+                  style={{
+                    padding: "5px 12px",
+                    borderRadius: 8,
+                    border: scene.videoLengthSeconds === seconds
+                      ? "1.5px solid #a855f7"
+                      : "1px solid #2a2a3e",
+                    background: scene.videoLengthSeconds === seconds
+                      ? "rgba(168,85,247,0.18)"
+                      : "#141420",
+                    color: scene.videoLengthSeconds === seconds ? "#d8b4fe" : "#9a9ab5",
+                    fontSize: 12,
+                    fontWeight: scene.videoLengthSeconds === seconds ? 700 : 400,
+                    cursor: "pointer",
+                    transition: "all 0.15s"
+                  }}
+                >
+                  {seconds}s
+                </button>
+              ))}
+            </div>
+          )}
+
+          {supportedLengths.length > 8 && (
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <input
+                type="range"
+                aria-label={`Video length for scene ${scene.id}`}
+                min={supportedLengths[0]}
+                max={supportedLengths[supportedLengths.length - 1]}
+                step={supportedLengths[1] - supportedLengths[0]}
+                value={scene.videoLengthSeconds}
+                onChange={(e) => onChangeVideoLength(scene.id, Number(e.target.value))}
+                style={{ flex: 1, accentColor: "#a855f7", cursor: "pointer" }}
+              />
+              <span style={{ fontSize: 11, color: "#7a7a92", minWidth: 60 }}>
+                {supportedLengths[0]}s – {supportedLengths[supportedLengths.length - 1]}s
+              </span>
+            </div>
           )}
         </div>
 
@@ -767,6 +837,7 @@ export default function App() {
   const [videoLengthWarnings, setVideoLengthWarnings] = useState(() =>
     normalizeScenesForVideoModel(defaultScenes, DEFAULT_VIDEO_MODEL_ID).warnings
   );
+  const [proposedVideoLengths, setProposedVideoLengths] = useState({});
   const [runs, setRuns] = useState([]);
   const [activeRunId, setActiveRunId] = useState(null);
   const [expandedRunIds, setExpandedRunIds] = useState({});
@@ -871,6 +942,13 @@ export default function App() {
           videoModelId
         );
 
+        const proposed = {};
+        uploadedPipeline.scenes.forEach((scene) => {
+          if (scene.videoLengthSeconds !== undefined) {
+            proposed[scene.id] = scene.videoLengthSeconds;
+          }
+        });
+
         clearAllTimers();
         activeRunIdRef.current = null;
         setScenes(nextPipeline.scenes);
@@ -881,6 +959,7 @@ export default function App() {
         setActiveRunId(null);
         setEditSceneId(null);
         setVideoLengthWarnings(nextPipeline.warnings);
+        setProposedVideoLengths(proposed);
         setImportMessage({
           type: "success",
           text: `Loaded ${nextPipeline.scenes.length} scenes from ${file.name}`
@@ -1645,6 +1724,7 @@ export default function App() {
               baseUrl={baseUrl}
               videoModelId={videoModelId}
               videoLengthWarning={videoLengthWarnings[scene.id]}
+              proposedVideoLength={proposedVideoLengths[scene.id]}
               onChangeVideoLength={handleSceneVideoLengthChange}
               onGenerateImage={generateImage}
               onApproveImage={approveImage}
@@ -1653,6 +1733,8 @@ export default function App() {
             />
           ))}
         </section>
+
+        <VideoEditor scenes={scenes} videos={videos} />
       </main>
 
       <footer
