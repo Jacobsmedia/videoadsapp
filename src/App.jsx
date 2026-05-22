@@ -1504,37 +1504,170 @@ export default function App() {
                 ))}
               </div>
 
-              <div style={{ fontSize: 11, color: "#8a8ca6", marginBottom: 6 }}>
-                {editSceneId === 1
-                  ? "Text-to-image prompt for the base avatar:"
-                  : "Edit prompt using Scene 1 as the reference image:"}
-              </div>
+              {(() => {
+                const activeScene = scenes.find((s) => s.id === editSceneId);
+                if (!activeScene) return null;
 
-              <textarea
-                value={prompts[editSceneId] || ""}
-                onChange={(event) =>
-                  setPrompts((current) => ({
-                    ...current,
-                    [editSceneId]: event.target.value
-                  }))
-                }
-                style={{
+                const fieldStyle = {
                   width: "100%",
-                  minHeight: 120,
                   background: "#1e1e2e",
                   border: "1px solid #2a2a3e",
-                  borderRadius: 12,
+                  borderRadius: 10,
                   color: "#d0d0e8",
                   fontFamily: '"JetBrains Mono", monospace',
                   fontSize: 12,
-                  padding: 12,
+                  padding: "10px 12px",
                   resize: "vertical",
-                  lineHeight: 1.5
-                }}
-              />
-              <div style={{ marginTop: 6, fontSize: 10, color: "#5f607a" }}>
-                {(prompts[editSceneId] || "").length} chars
-              </div>
+                  lineHeight: 1.5,
+                  boxSizing: "border-box"
+                };
+
+                const labelStyle = {
+                  fontSize: 11,
+                  color: "#8a8ca6",
+                  marginBottom: 4,
+                  display: "block"
+                };
+
+                const updateScene = (field, value) => {
+                  setScenes((current) =>
+                    current.map((s) => (s.id === editSceneId ? { ...s, [field]: value } : s))
+                  );
+                };
+
+                const rebuildImagePrompt = () => {
+                  setScenes((current) => {
+                    const updated = current.map((s) =>
+                      s.id === editSceneId
+                        ? { ...s }
+                        : s
+                    );
+                    setPrompts((currentPrompts) => ({
+                      ...currentPrompts,
+                      ...buildPrompts(
+                        updated.filter((s) => s.id === editSceneId),
+                        basePrompt
+                      )
+                    }));
+                    return updated;
+                  });
+                };
+
+                return (
+                  <div style={{ display: "grid", gap: 14 }}>
+                    {editSceneId === 1 && (
+                      <div>
+                        <label style={labelStyle}>Base avatar prompt (used to build Scene 1 image prompt):</label>
+                        <textarea
+                          value={basePrompt}
+                          rows={3}
+                          onChange={(e) => {
+                            setBasePrompt(e.target.value);
+                            setPrompts((current) => ({
+                              ...current,
+                              1: `${e.target.value}${activeScene.setting}. ${activeScene.emotion}.`
+                            }));
+                          }}
+                          style={fieldStyle}
+                        />
+                        <div style={{ marginTop: 4, fontSize: 10, color: "#5f607a" }}>{basePrompt.length} chars</div>
+                      </div>
+                    )}
+
+                    <div>
+                      <label style={labelStyle}>Dialogue (what she says):</label>
+                      <textarea
+                        value={activeScene.dialogue}
+                        rows={2}
+                        onChange={(e) => updateScene("dialogue", e.target.value)}
+                        style={fieldStyle}
+                      />
+                    </div>
+
+                    <div>
+                      <label style={labelStyle}>Setting (outfit + location):</label>
+                      <textarea
+                        value={activeScene.setting}
+                        rows={2}
+                        onChange={(e) => {
+                          updateScene("setting", e.target.value);
+                          setPrompts((current) => {
+                            if (editSceneId === 1) {
+                              return { ...current, 1: `${basePrompt}${e.target.value}. ${activeScene.emotion}.` };
+                            }
+                            return {
+                              ...current,
+                              [editSceneId]:
+                                "Keep the exact same woman's face, features, hair color, eye color, and skin tone from the reference image. " +
+                                `Change only her outfit and setting to: ${e.target.value}. ` +
+                                `Expression: ${activeScene.emotion}. She is mid-sentence, mouth slightly open. ` +
+                                "iPhone selfie, vertical 9:16, photorealistic."
+                            };
+                          });
+                        }}
+                        style={fieldStyle}
+                      />
+                    </div>
+
+                    <div>
+                      <label style={labelStyle}>Emotion / expression:</label>
+                      <textarea
+                        value={activeScene.emotion}
+                        rows={2}
+                        onChange={(e) => {
+                          updateScene("emotion", e.target.value);
+                          setPrompts((current) => {
+                            if (editSceneId === 1) {
+                              return { ...current, 1: `${basePrompt}${activeScene.setting}. ${e.target.value}.` };
+                            }
+                            return {
+                              ...current,
+                              [editSceneId]:
+                                "Keep the exact same woman's face, features, hair color, eye color, and skin tone from the reference image. " +
+                                `Change only her outfit and setting to: ${activeScene.setting}. ` +
+                                `Expression: ${e.target.value}. She is mid-sentence, mouth slightly open. ` +
+                                "iPhone selfie, vertical 9:16, photorealistic."
+                            };
+                          });
+                        }}
+                        style={fieldStyle}
+                      />
+                    </div>
+
+                    <div>
+                      <label style={labelStyle}>Video motion prompt (how she moves and speaks):</label>
+                      <textarea
+                        value={activeScene.vidPrompt}
+                        rows={3}
+                        onChange={(e) => updateScene("vidPrompt", e.target.value)}
+                        style={fieldStyle}
+                      />
+                    </div>
+
+                    <div>
+                      <label style={labelStyle}>
+                        {editSceneId === 1
+                          ? "Image generation prompt (auto-built from base prompt + setting + emotion):"
+                          : "Image generation prompt (auto-built from setting + emotion):"}
+                      </label>
+                      <textarea
+                        value={prompts[editSceneId] || ""}
+                        rows={4}
+                        onChange={(event) =>
+                          setPrompts((current) => ({
+                            ...current,
+                            [editSceneId]: event.target.value
+                          }))
+                        }
+                        style={{ ...fieldStyle, borderColor: "#3a3a5e" }}
+                      />
+                      <div style={{ marginTop: 4, fontSize: 10, color: "#5f607a" }}>
+                        {(prompts[editSceneId] || "").length} chars · edit directly or change fields above to auto-rebuild
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           )}
         </section>
