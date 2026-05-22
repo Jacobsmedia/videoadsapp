@@ -16,6 +16,11 @@ import {
   VIDEO_MODEL_OPTIONS
 } from "./video-models.js";
 import {
+  DEFAULT_IMAGE_MODEL_ID,
+  getImageModelById,
+  IMAGE_MODEL_OPTIONS
+} from "./image-models.js";
+import {
   getVeo1080pPath,
   getVeoResultUrl,
   getVeoTaskOutcome,
@@ -178,46 +183,15 @@ async function requestJson(path, options = {}) {
   return payload;
 }
 
-async function createNanoBanana(prompt) {
+async function createImageTask(body) {
   const payload = await requestJson("/api/v1/jobs/createTask", {
     method: "POST",
     headers,
-    body: JSON.stringify({
-      model: "nano-banana-2",
-      input: {
-        prompt,
-        image_input: [],
-        aspect_ratio: "9:16",
-        resolution: "2K",
-        output_format: "png"
-      }
-    })
+    body: JSON.stringify(body)
   });
 
   if (payload?.code !== 200 || !payload?.data?.taskId) {
     throw new Error(payload?.msg || "Failed to create image task");
-  }
-
-  return payload.data.taskId;
-}
-
-async function createNanoBananaEdit(prompt, imageUrls) {
-  const payload = await requestJson("/api/v1/jobs/createTask", {
-    method: "POST",
-    headers,
-    body: JSON.stringify({
-      model: "google/nano-banana-edit",
-      input: {
-        prompt,
-        image_urls: imageUrls,
-        output_format: "png",
-        image_size: "9:16"
-      }
-    })
-  });
-
-  if (payload?.code !== 200 || !payload?.data?.taskId) {
-    throw new Error(payload?.msg || "Failed to create edit task");
   }
 
   return payload.data.taskId;
@@ -861,6 +835,7 @@ export default function App() {
   const [images, setImages] = useState({});
   const [videos, setVideos] = useState({});
   const [videoModelId, setVideoModelId] = useState(DEFAULT_VIDEO_MODEL_ID);
+  const [imageModelId, setImageModelId] = useState(DEFAULT_IMAGE_MODEL_ID);
   const [videoLengthWarnings, setVideoLengthWarnings] = useState(() =>
     normalizeScenesForVideoModel(defaultScenes, DEFAULT_VIDEO_MODEL_ID).warnings
   );
@@ -1174,10 +1149,12 @@ export default function App() {
       setImages((current) => ({ ...current, [sceneId]: { status: "generating" } }));
 
       try {
-        const taskId =
+        const model = getImageModelById(imageModelId);
+        const body =
           sceneId === 1
-            ? await createNanoBanana(prompts[sceneId])
-            : await createNanoBananaEdit(prompts[sceneId], [baseUrl]);
+            ? model.buildT2iBody(prompts[sceneId])
+            : model.buildI2iBody(prompts[sceneId], [baseUrl]);
+        const taskId = await createImageTask(body);
 
         setImages((current) => ({
           ...current,
@@ -1191,7 +1168,7 @@ export default function App() {
         }));
       }
     },
-    [baseUrl, ensureActiveRun, pollTask, prompts]
+    [baseUrl, ensureActiveRun, imageModelId, pollTask, prompts]
   );
 
   const approveImage = useCallback(
@@ -1462,12 +1439,46 @@ export default function App() {
             }}
           >
             <label
-              htmlFor="video-model-select"
+              htmlFor="image-model-select"
               style={{
                 fontSize: 12,
                 color: "#9fa4c6",
                 fontWeight: 700,
                 letterSpacing: 0.2
+              }}
+            >
+              Image Model
+            </label>
+            <select
+              id="image-model-select"
+              aria-label="Image model"
+              value={imageModelId}
+              onChange={(e) => setImageModelId(e.target.value)}
+              style={{
+                minWidth: 220,
+                padding: "8px 12px",
+                borderRadius: 10,
+                border: "1px solid #2a2a3e",
+                background: "#141420",
+                color: "#e8e8f0",
+                fontSize: 12
+              }}
+            >
+              {IMAGE_MODEL_OPTIONS.map((model) => (
+                <option key={model.id} value={model.id}>
+                  {model.provider} - {model.label}
+                </option>
+              ))}
+            </select>
+
+            <label
+              htmlFor="video-model-select"
+              style={{
+                fontSize: 12,
+                color: "#9fa4c6",
+                fontWeight: 700,
+                letterSpacing: 0.2,
+                marginLeft: 8
               }}
             >
               Video Model
@@ -1954,7 +1965,7 @@ export default function App() {
           }}
         >
           <span>
-            Proxy: Cloudflare Worker - kie.ai | Images: Nano Banana 2K 9:16 |
+            Proxy: Cloudflare Worker - kie.ai | Images: {getImageModelById(imageModelId).label} |
             Videos: KIE selected model 9:16
           </span>
           <span>
