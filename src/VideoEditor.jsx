@@ -32,7 +32,16 @@ function wrapLines(ctx, text, maxWidth) {
   return lines;
 }
 
-export function VideoEditor({ scenes, videos }) {
+const EMPTY_SCENE_FORM = {
+  label: "",
+  dialogue: "",
+  setting: "",
+  emotion: "",
+  vidPrompt: "",
+  videoLengthSeconds: 8
+};
+
+export function VideoEditor({ scenes, videos, onAddScene }) {
   const completedScenes = scenes.filter(
     (s) => videos[s.id]?.status === "success" && videos[s.id]?.url
   );
@@ -48,6 +57,8 @@ export function VideoEditor({ scenes, videos }) {
   const [mergeProgress, setMergeProgress] = useState("");
   const [mergeError, setMergeError] = useState(null);
   const [mergeUrl, setMergeUrl] = useState(null);
+  const [showAddScene, setShowAddScene] = useState(false);
+  const [newScene, setNewScene] = useState(EMPTY_SCENE_FORM);
 
   const videoRef = useRef(null);
 
@@ -215,7 +226,19 @@ export function VideoEditor({ scenes, videos }) {
     }
   }, [completedScenes, videos, captionsEnabled, captionTexts]);
 
-  if (completedScenes.length === 0) return null;
+  const handleAddSceneSubmit = useCallback(() => {
+    if (!newScene.label.trim()) return;
+    onAddScene?.({
+      label: newScene.label.trim(),
+      dialogue: newScene.dialogue.trim(),
+      setting: newScene.setting.trim(),
+      emotion: newScene.emotion.trim(),
+      vidPrompt: newScene.vidPrompt.trim(),
+      videoLengthSeconds: Number(newScene.videoLengthSeconds) || 8
+    });
+    setNewScene(EMPTY_SCENE_FORM);
+    setShowAddScene(false);
+  }, [newScene, onAddScene]);
 
   const currentScene = currentIndex !== null ? completedScenes[currentIndex] : null;
 
@@ -265,355 +288,520 @@ export function VideoEditor({ scenes, videos }) {
           </div>
           <h2 style={{ margin: 0, fontSize: 20, color: "#f5f7ff" }}>Video Editor</h2>
         </div>
-        <div style={{ marginLeft: "auto", fontSize: 12, color: "#7a7a92" }}>
-          {completedScenes.length} of {scenes.length} scenes ready
-        </div>
-      </div>
-
-      {/* Caption controls */}
-      <div
-        style={{
-          display: "flex",
-          gap: 12,
-          alignItems: "center",
-          marginBottom: 20,
-          flexWrap: "wrap"
-        }}
-      >
-        <label
-          style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}
-        >
-          <input
-            type="checkbox"
-            checked={captionsEnabled}
-            onChange={(e) => setCaptionsEnabled(e.target.checked)}
-            style={{ width: 16, height: 16, accentColor: "#a855f7", cursor: "pointer" }}
-          />
-          <span style={{ fontSize: 13, color: "#d2d2e8", fontWeight: 600 }}>
-            Captions (dialogue overlay)
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
+          <span style={{ fontSize: 12, color: "#7a7a92" }}>
+            {completedScenes.length} of {scenes.length} scenes ready
           </span>
-        </label>
-        {captionsEnabled && (
-          <span style={{ fontSize: 11, color: "#7a7a92" }}>
-            Click a caption below to edit the text
-          </span>
-        )}
-      </div>
-
-      {/* Scene list */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
-          gap: 14,
-          marginBottom: 24
-        }}
-      >
-        {completedScenes.map((scene, idx) => {
-          const isEditing = editingCaptionId === scene.id;
-          const isActive = currentIndex === idx;
-
-          return (
-            <div
-              key={scene.id}
-              style={{
-                borderRadius: 14,
-                background: isActive ? "rgba(168, 85, 247, 0.12)" : "#151524",
-                border: isActive ? "1px solid #a855f7" : "1px solid #242438",
-                padding: "14px 14px 10px",
-                transition: "border-color 0.2s, background 0.2s"
-              }}
-            >
-              <div
-                style={{
-                  fontSize: 10,
-                  color: "#6d6d88",
-                  fontWeight: 700,
-                  letterSpacing: 1.1,
-                  textTransform: "uppercase",
-                  marginBottom: 4
-                }}
-              >
-                Scene {scene.id}
-              </div>
-              <div
-                style={{ fontSize: 13, fontWeight: 700, color: "#e8e8f0", marginBottom: 10 }}
-              >
-                {scene.label}
-              </div>
-
-              <video
-                src={videos[scene.id].url}
-                style={{
-                  width: "100%",
-                  borderRadius: 10,
-                  display: "block",
-                  marginBottom: captionsEnabled ? 10 : 0
-                }}
-                muted
-                playsInline
-                preload="metadata"
-              />
-
-              {captionsEnabled && (
-                <div>
-                  {isEditing ? (
-                    <textarea
-                      value={captionTexts[scene.id] ?? ""}
-                      onChange={(e) =>
-                        setCaptionTexts((prev) => ({ ...prev, [scene.id]: e.target.value }))
-                      }
-                      onBlur={() => setEditingCaptionId(null)}
-                      autoFocus
-                      rows={3}
-                      style={{
-                        width: "100%",
-                        boxSizing: "border-box",
-                        background: "#0e0e1c",
-                        border: "1px solid #a855f7",
-                        borderRadius: 8,
-                        color: "#e8e8f0",
-                        fontSize: 12,
-                        padding: "8px 10px",
-                        resize: "vertical",
-                        fontFamily: "inherit"
-                      }}
-                    />
-                  ) : (
-                    <div
-                      onClick={() => setEditingCaptionId(scene.id)}
-                      title="Click to edit caption"
-                      style={{
-                        fontSize: 11,
-                        color: "#b0b0cc",
-                        fontStyle: "italic",
-                        padding: "6px 8px",
-                        background: "#0e0e1c",
-                        borderRadius: 8,
-                        border: "1px solid #242438",
-                        cursor: "text",
-                        lineHeight: 1.5,
-                        minHeight: 36
-                      }}
-                    >
-                      {captionTexts[scene.id] || (
-                        <span style={{ color: "#5f607a" }}>No caption — click to add</span>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Preview player */}
-      <div
-        style={{
-          marginBottom: 24,
-          padding: "18px 20px",
-          background: "#0e0e1c",
-          borderRadius: 16,
-          border: "1px solid #1e1e34"
-        }}
-      >
-        <div
-          style={{
-            fontSize: 10,
-            fontWeight: 700,
-            color: "#6d6d88",
-            letterSpacing: 1.2,
-            textTransform: "uppercase",
-            marginBottom: 12
-          }}
-        >
-          Preview Player
-        </div>
-
-        {isPlaying && currentScene ? (
-          <div style={{ position: "relative", display: "inline-block", width: "100%", maxWidth: 320 }}>
-            <video
-              ref={videoRef}
-              controls
-              playsInline
-              onEnded={handleVideoEnded}
-              style={{ width: "100%", borderRadius: 12, display: "block" }}
-            />
-            {captionsEnabled && captionTexts[currentScene.id]?.trim() && (
-              <div
-                style={{
-                  position: "absolute",
-                  bottom: 44,
-                  left: 0,
-                  right: 0,
-                  padding: "8px 14px",
-                  background: "rgba(0,0,0,0.68)",
-                  color: "#fff",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  textAlign: "center",
-                  lineHeight: 1.5,
-                  borderRadius: "0 0 10px 10px",
-                  pointerEvents: "none"
-                }}
-              >
-                {captionTexts[currentScene.id]}
-              </div>
-            )}
-            <div
-              style={{
-                marginTop: 8,
-                fontSize: 12,
-                color: "#9a9ab5",
-                textAlign: "center"
-              }}
-            >
-              Scene {currentScene.id} / {completedScenes.length} — {currentScene.label}
-            </div>
-          </div>
-        ) : (
-          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-            <button type="button" onClick={() => playScene(0)} style={btnStyle("#58a6ff")}>
-              ▶ Play All Scenes
-            </button>
-            {completedScenes.map((scene, idx) => (
-              <button
-                key={scene.id}
-                type="button"
-                onClick={() => playScene(idx)}
-                style={btnStyle("#2a2a42", true)}
-              >
-                Scene {scene.id}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {isPlaying && (
-          <div style={{ marginTop: 10 }}>
+          {onAddScene && (
             <button
               type="button"
-              onClick={() => {
-                setIsPlaying(false);
-                setCurrentIndex(null);
-              }}
-              style={btnStyle("#444466", true)}
+              onClick={() => setShowAddScene((v) => !v)}
+              style={btnStyle(showAddScene ? "#444466" : "linear-gradient(135deg, #a855f7, #ec4899)", true)}
             >
-              Stop
+              {showAddScene ? "✕ Cancel" : "+ Add Scene"}
             </button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
-      {/* Merge & Download */}
-      <div
-        style={{
-          padding: "18px 20px",
-          background: "#0e0e1c",
-          borderRadius: 16,
-          border: "1px solid #1e1e34"
-        }}
-      >
+      {/* Add Scene Form */}
+      {showAddScene && onAddScene && (
         <div
           style={{
-            fontSize: 10,
-            fontWeight: 700,
-            color: "#6d6d88",
-            letterSpacing: 1.2,
-            textTransform: "uppercase",
-            marginBottom: 10
+            marginBottom: 24,
+            padding: "18px 20px",
+            background: "#0e0e1c",
+            borderRadius: 16,
+            border: "1px solid #a855f740"
           }}
         >
-          Merge &amp; Export
-        </div>
-
-        <div style={{ fontSize: 12, color: "#7a7a92", marginBottom: 14, lineHeight: 1.6 }}>
-          Renders all {completedScenes.length} scenes onto a canvas{captionsEnabled ? " with captions burned in" : ""}
-          {" "}and exports as a single video file.{" "}
-          <strong style={{ color: "#ffcb52" }}>Note:</strong> audio from the original videos is not
-          included (browser limitation for cross-origin clips).
-        </div>
-
-        {!merging && !mergeUrl && (
-          <button
-            type="button"
-            onClick={mergeVideos}
-            style={btnStyle("linear-gradient(135deg, #a855f7, #ec4899)")}
+          <div
+            style={{
+              fontSize: 10,
+              fontWeight: 700,
+              color: "#a855f7",
+              letterSpacing: 1.2,
+              textTransform: "uppercase",
+              marginBottom: 14
+            }}
           >
-            Merge All &amp; Download
-          </button>
-        )}
-
-        {merging && (
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div
+            New Scene
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            {[
+              { key: "label", label: "Scene Label *", placeholder: "e.g. Hook - Energetic Opening" },
+              { key: "emotion", label: "Emotion / Direction", placeholder: "e.g. Energetic, confident" },
+              { key: "setting", label: "Setting", placeholder: "e.g. Bright living room, mint top" },
+              { key: "videoLengthSeconds", label: "Length (seconds)", placeholder: "8", type: "number" }
+            ].map(({ key, label, placeholder, type }) => (
+              <div key={key}>
+                <div style={{ fontSize: 11, color: "#7a7a92", marginBottom: 4, fontWeight: 600 }}>
+                  {label}
+                </div>
+                <input
+                  type={type || "text"}
+                  value={newScene[key]}
+                  onChange={(e) => setNewScene((prev) => ({ ...prev, [key]: e.target.value }))}
+                  placeholder={placeholder}
+                  style={{
+                    width: "100%",
+                    boxSizing: "border-box",
+                    background: "#151524",
+                    border: "1px solid #242438",
+                    borderRadius: 8,
+                    color: "#e8e8f0",
+                    fontSize: 12,
+                    padding: "8px 10px",
+                    fontFamily: "inherit",
+                    outline: "none"
+                  }}
+                />
+              </div>
+            ))}
+          </div>
+          <div style={{ marginTop: 12 }}>
+            <div style={{ fontSize: 11, color: "#7a7a92", marginBottom: 4, fontWeight: 600 }}>
+              Dialogue / Caption
+            </div>
+            <textarea
+              value={newScene.dialogue}
+              onChange={(e) => setNewScene((prev) => ({ ...prev, dialogue: e.target.value }))}
+              placeholder="What the person says in this scene…"
+              rows={2}
               style={{
-                width: 18,
-                height: 18,
-                border: "2px solid #a855f7",
-                borderTopColor: "transparent",
-                borderRadius: "50%",
-                animation: "spin 0.7s linear infinite"
+                width: "100%",
+                boxSizing: "border-box",
+                background: "#151524",
+                border: "1px solid #242438",
+                borderRadius: 8,
+                color: "#e8e8f0",
+                fontSize: 12,
+                padding: "8px 10px",
+                resize: "vertical",
+                fontFamily: "inherit",
+                outline: "none"
               }}
             />
-            <span style={{ fontSize: 12, color: "#b0b0cc" }}>{mergeProgress}</span>
           </div>
-        )}
-
-        {mergeError && (
-          <div>
-            <div
+          <div style={{ marginTop: 12 }}>
+            <div style={{ fontSize: 11, color: "#7a7a92", marginBottom: 4, fontWeight: 600 }}>
+              Video Prompt
+            </div>
+            <textarea
+              value={newScene.vidPrompt}
+              onChange={(e) => setNewScene((prev) => ({ ...prev, vidPrompt: e.target.value }))}
+              placeholder="Describe the video motion, camera style, audio…"
+              rows={3}
               style={{
+                width: "100%",
+                boxSizing: "border-box",
+                background: "#151524",
+                border: "1px solid #242438",
+                borderRadius: 8,
+                color: "#e8e8f0",
                 fontSize: 12,
-                color: "#f85149",
-                marginBottom: 10,
-                padding: "10px 12px",
-                background: "#2d0f0f",
-                borderRadius: 10
+                padding: "8px 10px",
+                resize: "vertical",
+                fontFamily: "inherit",
+                outline: "none"
+              }}
+            />
+          </div>
+          <div style={{ marginTop: 14, display: "flex", gap: 10 }}>
+            <button
+              type="button"
+              onClick={handleAddSceneSubmit}
+              disabled={!newScene.label.trim()}
+              style={{
+                ...btnStyle("linear-gradient(135deg, #a855f7, #ec4899)"),
+                opacity: newScene.label.trim() ? 1 : 0.45
               }}
             >
-              {mergeError}
+              Add Scene to Pipeline
+            </button>
+            <button
+              type="button"
+              onClick={() => { setShowAddScene(false); setNewScene(EMPTY_SCENE_FORM); }}
+              style={btnStyle("#444466", true)}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Empty state */}
+      {completedScenes.length === 0 && (
+        <div
+          style={{
+            padding: "32px 20px",
+            textAlign: "center",
+            color: "#5f607a",
+            fontSize: 13,
+            background: "#0e0e1c",
+            borderRadius: 16,
+            border: "1px dashed #242438",
+            marginBottom: 24
+          }}
+        >
+          <div style={{ fontSize: 28, marginBottom: 10 }}>🎞️</div>
+          <div style={{ fontWeight: 600, color: "#7a7a92", marginBottom: 6 }}>No videos ready yet</div>
+          <div>Generate and approve scene videos above — they'll appear here for editing and export.</div>
+        </div>
+      )}
+
+      {/* Caption controls */}
+      {completedScenes.length > 0 && (
+        <div
+          style={{
+            display: "flex",
+            gap: 12,
+            alignItems: "center",
+            marginBottom: 20,
+            flexWrap: "wrap"
+          }}
+        >
+          <label
+            style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}
+          >
+            <input
+              type="checkbox"
+              checked={captionsEnabled}
+              onChange={(e) => setCaptionsEnabled(e.target.checked)}
+              style={{ width: 16, height: 16, accentColor: "#a855f7", cursor: "pointer" }}
+            />
+            <span style={{ fontSize: 13, color: "#d2d2e8", fontWeight: 600 }}>
+              Captions (dialogue overlay)
+            </span>
+          </label>
+          {captionsEnabled && (
+            <span style={{ fontSize: 11, color: "#7a7a92" }}>
+              Click a caption below to edit the text
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Scene list */}
+      {completedScenes.length > 0 && (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
+            gap: 14,
+            marginBottom: 24
+          }}
+        >
+          {completedScenes.map((scene, idx) => {
+            const isEditing = editingCaptionId === scene.id;
+            const isActive = currentIndex === idx;
+
+            return (
+              <div
+                key={scene.id}
+                style={{
+                  borderRadius: 14,
+                  background: isActive ? "rgba(168, 85, 247, 0.12)" : "#151524",
+                  border: isActive ? "1px solid #a855f7" : "1px solid #242438",
+                  padding: "14px 14px 10px",
+                  transition: "border-color 0.2s, background 0.2s"
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: 10,
+                    color: "#6d6d88",
+                    fontWeight: 700,
+                    letterSpacing: 1.1,
+                    textTransform: "uppercase",
+                    marginBottom: 4
+                  }}
+                >
+                  Scene {scene.id}
+                </div>
+                <div
+                  style={{ fontSize: 13, fontWeight: 700, color: "#e8e8f0", marginBottom: 10 }}
+                >
+                  {scene.label}
+                </div>
+
+                <video
+                  src={videos[scene.id].url}
+                  style={{
+                    width: "100%",
+                    borderRadius: 10,
+                    display: "block",
+                    marginBottom: captionsEnabled ? 10 : 0
+                  }}
+                  muted
+                  playsInline
+                  preload="metadata"
+                />
+
+                {captionsEnabled && (
+                  <div>
+                    {isEditing ? (
+                      <textarea
+                        value={captionTexts[scene.id] ?? ""}
+                        onChange={(e) =>
+                          setCaptionTexts((prev) => ({ ...prev, [scene.id]: e.target.value }))
+                        }
+                        onBlur={() => setEditingCaptionId(null)}
+                        autoFocus
+                        rows={3}
+                        style={{
+                          width: "100%",
+                          boxSizing: "border-box",
+                          background: "#0e0e1c",
+                          border: "1px solid #a855f7",
+                          borderRadius: 8,
+                          color: "#e8e8f0",
+                          fontSize: 12,
+                          padding: "8px 10px",
+                          resize: "vertical",
+                          fontFamily: "inherit"
+                        }}
+                      />
+                    ) : (
+                      <div
+                        onClick={() => setEditingCaptionId(scene.id)}
+                        title="Click to edit caption"
+                        style={{
+                          fontSize: 11,
+                          color: "#b0b0cc",
+                          fontStyle: "italic",
+                          padding: "6px 8px",
+                          background: "#0e0e1c",
+                          borderRadius: 8,
+                          border: "1px solid #242438",
+                          cursor: "text",
+                          lineHeight: 1.5,
+                          minHeight: 36
+                        }}
+                      >
+                        {captionTexts[scene.id] || (
+                          <span style={{ color: "#5f607a" }}>No caption — click to add</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Preview player */}
+      {completedScenes.length > 0 && (
+        <div
+          style={{
+            marginBottom: 24,
+            padding: "18px 20px",
+            background: "#0e0e1c",
+            borderRadius: 16,
+            border: "1px solid #1e1e34"
+          }}
+        >
+          <div
+            style={{
+              fontSize: 10,
+              fontWeight: 700,
+              color: "#6d6d88",
+              letterSpacing: 1.2,
+              textTransform: "uppercase",
+              marginBottom: 12
+            }}
+          >
+            Preview Player
+          </div>
+
+          {isPlaying && currentScene ? (
+            <div style={{ position: "relative", display: "inline-block", width: "100%", maxWidth: 320 }}>
+              <video
+                ref={videoRef}
+                controls
+                playsInline
+                onEnded={handleVideoEnded}
+                style={{ width: "100%", borderRadius: 12, display: "block" }}
+              />
+              {captionsEnabled && captionTexts[currentScene.id]?.trim() && (
+                <div
+                  style={{
+                    position: "absolute",
+                    bottom: 44,
+                    left: 0,
+                    right: 0,
+                    padding: "8px 14px",
+                    background: "rgba(0,0,0,0.68)",
+                    color: "#fff",
+                    fontSize: 13,
+                    fontWeight: 600,
+                    textAlign: "center",
+                    lineHeight: 1.5,
+                    borderRadius: "0 0 10px 10px",
+                    pointerEvents: "none"
+                  }}
+                >
+                  {captionTexts[currentScene.id]}
+                </div>
+              )}
+              <div
+                style={{
+                  marginTop: 8,
+                  fontSize: 12,
+                  color: "#9a9ab5",
+                  textAlign: "center"
+                }}
+              >
+                Scene {currentScene.id} / {completedScenes.length} — {currentScene.label}
+              </div>
             </div>
+          ) : (
+            <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+              <button type="button" onClick={() => playScene(0)} style={btnStyle("#58a6ff")}>
+                ▶ Play All Scenes
+              </button>
+              {completedScenes.map((scene, idx) => (
+                <button
+                  key={scene.id}
+                  type="button"
+                  onClick={() => playScene(idx)}
+                  style={btnStyle("#2a2a42", true)}
+                >
+                  Scene {scene.id}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {isPlaying && (
+            <div style={{ marginTop: 10 }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsPlaying(false);
+                  setCurrentIndex(null);
+                }}
+                style={btnStyle("#444466", true)}
+              >
+                Stop
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Merge & Download */}
+      {completedScenes.length > 0 && (
+        <div
+          style={{
+            padding: "18px 20px",
+            background: "#0e0e1c",
+            borderRadius: 16,
+            border: "1px solid #1e1e34"
+          }}
+        >
+          <div
+            style={{
+              fontSize: 10,
+              fontWeight: 700,
+              color: "#6d6d88",
+              letterSpacing: 1.2,
+              textTransform: "uppercase",
+              marginBottom: 10
+            }}
+          >
+            Merge &amp; Export
+          </div>
+
+          <div style={{ fontSize: 12, color: "#7a7a92", marginBottom: 14, lineHeight: 1.6 }}>
+            Renders all {completedScenes.length} scenes onto a canvas{captionsEnabled ? " with captions burned in" : ""}
+            {" "}and exports as a single video file.{" "}
+            <strong style={{ color: "#ffcb52" }}>Note:</strong> audio from the original videos is not
+            included (browser limitation for cross-origin clips).
+          </div>
+
+          {!merging && !mergeUrl && (
             <button
               type="button"
               onClick={mergeVideos}
-              style={btnStyle("#a855f7", true)}
+              style={btnStyle("linear-gradient(135deg, #a855f7, #ec4899)")}
             >
-              Retry
+              Merge All &amp; Download
             </button>
-          </div>
-        )}
+          )}
 
-        {mergeUrl && (
-          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-            <span style={{ fontSize: 12, color: "#34d058", fontWeight: 600 }}>
-              ✓ {mergeProgress}
-            </span>
-            <a
-              href={mergeUrl}
-              download="merged-video.webm"
-              style={{
-                ...btnStyle("#34d058"),
-                textDecoration: "none",
-                display: "inline-block"
-              }}
-            >
-              Download Merged Video
-            </a>
-            <button
-              type="button"
-              onClick={() => {
-                setMergeUrl(null);
-                setMergeProgress("");
-              }}
-              style={btnStyle("#444466", true)}
-            >
-              Re-merge
-            </button>
-          </div>
-        )}
-      </div>
+          {merging && (
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <div
+                style={{
+                  width: 18,
+                  height: 18,
+                  border: "2px solid #a855f7",
+                  borderTopColor: "transparent",
+                  borderRadius: "50%",
+                  animation: "spin 0.7s linear infinite"
+                }}
+              />
+              <span style={{ fontSize: 12, color: "#b0b0cc" }}>{mergeProgress}</span>
+            </div>
+          )}
+
+          {mergeError && (
+            <div>
+              <div
+                style={{
+                  fontSize: 12,
+                  color: "#f85149",
+                  marginBottom: 10,
+                  padding: "10px 12px",
+                  background: "#2d0f0f",
+                  borderRadius: 10
+                }}
+              >
+                {mergeError}
+              </div>
+              <button
+                type="button"
+                onClick={mergeVideos}
+                style={btnStyle("#a855f7", true)}
+              >
+                Retry
+              </button>
+            </div>
+          )}
+
+          {mergeUrl && (
+            <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+              <span style={{ fontSize: 12, color: "#34d058", fontWeight: 600 }}>
+                ✓ {mergeProgress}
+              </span>
+              <a
+                href={mergeUrl}
+                download="merged-video.webm"
+                style={{
+                  ...btnStyle("#34d058"),
+                  textDecoration: "none",
+                  display: "inline-block"
+                }}
+              >
+                Download Merged Video
+              </a>
+              <button
+                type="button"
+                onClick={() => {
+                  setMergeUrl(null);
+                  setMergeProgress("");
+                }}
+                style={btnStyle("#444466", true)}
+              >
+                Re-merge
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
