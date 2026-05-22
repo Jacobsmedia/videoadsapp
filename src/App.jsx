@@ -1027,6 +1027,28 @@ export default function App() {
     });
   }, []);
 
+  const addScene = useCallback(
+    (sceneData) => {
+      setScenes((current) => {
+        const maxId = current.reduce((m, s) => Math.max(m, s.id), 0);
+        const newId = maxId + 1;
+        return [
+          ...current,
+          {
+            id: newId,
+            label: sceneData.label,
+            setting: sceneData.setting || "",
+            dialogue: sceneData.dialogue || "",
+            emotion: sceneData.emotion || "",
+            vidPrompt: sceneData.vidPrompt || "",
+            videoLengthSeconds: sceneData.videoLengthSeconds || 8
+          }
+        ];
+      });
+    },
+    []
+  );
+
   const toggleRunExpanded = useCallback((runId) => {
     setExpandedRunIds((current) => ({
       ...current,
@@ -1910,7 +1932,7 @@ export default function App() {
           ))}
         </section>
 
-        <VideoEditor scenes={scenes} videos={videos} />
+        <VideoEditor scenes={scenes} videos={videos} onAddScene={addScene} />
       </main>
 
       <footer
