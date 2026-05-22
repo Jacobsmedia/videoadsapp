@@ -127,6 +127,11 @@ function buildPrompts(scenes, basePrompt) {
   return nextPrompts;
 }
 
+function sceneNeedsProductImage(scene) {
+  const combined = `${scene?.setting || ""} ${scene?.dialogue || ""} ${scene?.vidPrompt || ""}`.toLowerCase();
+  return combined.includes("product");
+}
+
 function countRunAssets(run) {
   return Object.values(run.assets || {}).reduce(
     (totals, asset) => ({
@@ -536,7 +541,10 @@ function SceneCard({
   onRegenerateImage,
   onGenerateVideo,
   availableSourceScenes,
-  onReuseImage
+  onReuseImage,
+  productImage,
+  onUploadProductImage,
+  requiresProductImage
 }) {
   const isBaseScene = scene.id === 1;
   const waitingForBase = !isBaseScene && !baseUrl;
@@ -880,6 +888,30 @@ function SceneCard({
         )}
       </div>
 
+      {requiresProductImage && (
+        <div
+          style={{
+            marginBottom: 16,
+            padding: "12px 14px",
+            background: "#161624",
+            border: "1px solid #242438",
+            borderRadius: 12
+          }}
+        >
+          <div style={{ fontSize: 11, color: "#9fa4c6", marginBottom: 8, fontWeight: 700 }}>
+            Product image required for this scene
+          </div>
+          <input type="file" accept="image/*" onChange={(event) => onUploadProductImage(scene.id, event)} />
+          {productImage?.previewUrl && (
+            <img
+              src={productImage.previewUrl}
+              alt={`Product for scene ${scene.id}`}
+              style={{ marginTop: 10, width: "100%", maxWidth: 200, borderRadius: 10, border: "1px solid #2a2a3e" }}
+            />
+          )}
+        </div>
+      )}
+
       {imageState?.status === "approved" && (
         <div>
           <div
@@ -948,6 +980,8 @@ export default function App() {
   );
   const [proposedVideoLengths, setProposedVideoLengths] = useState({});
   const [runs, setRuns] = useState([]);
+  const [customAvatar, setCustomAvatar] = useState(null);
+  const [productImages, setProductImages] = useState({});
   const [activeRunId, setActiveRunId] = useState(null);
   const [expandedRunIds, setExpandedRunIds] = useState({});
   const [editSceneId, setEditSceneId] = useState(null);
@@ -1263,6 +1297,18 @@ export default function App() {
 
   const generateImage = useCallback(
     async (sceneId) => {
+      if (sceneId === 1 && customAvatar?.previewUrl) {
+        ensureActiveRun();
+        setImages((current) => ({
+          ...current,
+          [sceneId]: {
+            status: "approved",
+            url: customAvatar.previewUrl,
+            renderUrl: customAvatar.previewUrl
+          }
+        }));
+        return;
+      }
       ensureActiveRun();
       setImages((current) => ({ ...current, [sceneId]: { status: "generating" } }));
 
@@ -1330,6 +1376,13 @@ export default function App() {
       if (!scene || !imageUrl) {
         return;
       }
+      if (sceneNeedsProductImage(scene) && !productImages[sceneId]?.previewUrl) {
+        setVideos((current) => ({
+          ...current,
+          [sceneId]: { status: "fail", error: "Please upload a product image before generating this video." }
+        }));
+        return;
+      }
 
       ensureActiveRun();
       setVideos((current) => ({ ...current, [sceneId]: { status: "generating" } }));
@@ -1338,7 +1391,10 @@ export default function App() {
         const videoLengthSeconds = scene.videoLengthSeconds;
         const prompt =
           `Vertical 9:16, ${videoLengthSeconds} seconds, photorealistic UGC selfie video, iPhone front camera. ` +
-          `Match the woman from the reference image exactly. She says: "${scene.dialogue}" ${scene.vidPrompt}`;
+          `Match the woman from the reference image exactly. She says: "${scene.dialogue}" ${scene.vidPrompt}` +
+          (productImages[sceneId]?.name
+            ? ` Include and clearly show the uploaded product image (${productImages[sceneId].name}) in-hand or in-frame where appropriate.`
+            : "");
         const request = createVideoGenerationRequest({
           prompt,
           imageUrl,
@@ -1367,7 +1423,7 @@ export default function App() {
         }));
       }
     },
-    [ensureActiveRun, images, pollTask, scenes, videoModelId]
+    [ensureActiveRun, images, pollTask, productImages, scenes, videoModelId]
   );
 
   const generateAllRemaining = useCallback(() => {
@@ -1511,6 +1567,22 @@ export default function App() {
           </div>
 
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <label style={{ fontSize: 12, color: "#9fa4c6", fontWeight: 700 }}>
+              Upload reference avatar:
+              <input
+                type="file"
+                accept="image/*"
+                style={{ display: "block", marginTop: 6 }}
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (!file) return;
+                  setCustomAvatar({
+                    name: file.name,
+                    previewUrl: URL.createObjectURL(file)
+                  });
+                }}
+              />
+            </label>
             {!baseUrl && (
               <button
                 type="button"
@@ -2061,6 +2133,19 @@ export default function App() {
                 .filter((s) => s.id !== scene.id && images[s.id]?.url)
                 .map((s) => ({ id: s.id, label: s.label }))}
               onReuseImage={(sourceSceneId) => reuseImage(scene.id, sourceSceneId)}
+              productImage={productImages[scene.id]}
+              requiresProductImage={sceneNeedsProductImage(scene)}
+              onUploadProductImage={(targetSceneId, event) => {
+                const file = event.target.files?.[0];
+                if (!file) return;
+                setProductImages((current) => ({
+                  ...current,
+                  [targetSceneId]: {
+                    name: file.name,
+                    previewUrl: URL.createObjectURL(file)
+                  }
+                }));
+              }}
             />
           ))}
         </section>
