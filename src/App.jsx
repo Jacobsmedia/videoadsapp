@@ -183,8 +183,8 @@ async function requestJson(path, options = {}) {
   return payload;
 }
 
-async function createImageTask(body) {
-  const payload = await requestJson("/api/v1/jobs/createTask", {
+async function createImageTask(body, path = "/api/v1/jobs/createTask") {
+  const payload = await requestJson(path, {
     method: "POST",
     headers,
     body: JSON.stringify(body)
@@ -195,6 +195,34 @@ async function createImageTask(body) {
   }
 
   return payload.data.taskId;
+}
+
+// Normalise Flux Kontext poll response → {state, url, failMsg}
+async function getFluxKontextTaskResult(taskId) {
+  const payload = await requestJson(
+    `/api/v1/flux/kontext/record-info?taskId=${taskId}`,
+    { headers }
+  );
+  const data = payload?.data;
+  if (!data) return null;
+  const flag = data.successFlag;
+  if (flag === 1) return { state: "success", url: data.response?.resultImageUrl };
+  if (flag === 2 || flag === 3) return { state: "fail", failMsg: data.failMsg || "Generation failed" };
+  return { state: "pending" };
+}
+
+// Normalise GPT-4o image poll response → {state, resultUrls, failMsg}
+async function getGpt4oTaskResult(taskId) {
+  const payload = await requestJson(
+    `/api/v1/gpt4o-image/record-info?taskId=${taskId}`,
+    { headers }
+  );
+  const data = payload?.data;
+  if (!data) return null;
+  const flag = data.successFlag;
+  if (flag === 1) return { state: "success", resultUrls: data.response?.result_urls };
+  if (flag === 2) return { state: "fail", failMsg: data.errorMessage || "Generation failed" };
+  return { state: "pending" };
 }
 
 async function getTaskResult(taskId) {
@@ -1033,7 +1061,8 @@ export default function App() {
 
   const pollTask = useCallback((sceneId, taskId, type) => {
     const timerKey = `${type}_${sceneId}`;
-    const updateState = type === "img" ? setImages : setVideos;
+    const isImgType = type === "img" || type === "imgFluxKontext" || type === "imgGpt4o";
+    const updateState = isImgType ? setImages : setVideos;
 
     if (timers.current[timerKey]) {
       clearInterval(timers.current[timerKey]);
@@ -1057,7 +1086,11 @@ export default function App() {
 
       try {
         const result =
-          type === "img" || type === "vidJob"
+          type === "imgFluxKontext"
+            ? await getFluxKontextTaskResult(taskId)
+            : type === "imgGpt4o"
+            ? await getGpt4oTaskResult(taskId)
+            : type === "img" || type === "vidJob"
             ? await getTaskResult(taskId)
             : await getVeoResult(taskId);
 
@@ -1097,7 +1130,7 @@ export default function App() {
           }
 
           updateRunAssets(sceneId, {
-            [type === "img" ? "image" : "video"]: {
+            [isImgType ? "image" : "video"]: {
               url: assetUrl,
               status: "success",
               taskId
@@ -1154,13 +1187,13 @@ export default function App() {
           sceneId === 1
             ? model.buildT2iBody(prompts[sceneId])
             : model.buildI2iBody(prompts[sceneId], [baseUrl]);
-        const taskId = await createImageTask(body);
+        const taskId = await createImageTask(body, model.createPath);
 
         setImages((current) => ({
           ...current,
           [sceneId]: { status: "polling", taskId }
         }));
-        pollTask(sceneId, taskId, "img");
+        pollTask(sceneId, taskId, model.pollType ?? "img");
       } catch (error) {
         setImages((current) => ({
           ...current,
