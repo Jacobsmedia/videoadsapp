@@ -293,8 +293,15 @@ function extractAssetUrl(value) {
     return "";
   }
 
-  if (typeof value === "string" && /^https?:\/\//i.test(value)) {
-    return value;
+  if (typeof value === "string") {
+    const trimmedValue = value.trim();
+    if (
+      /^https?:\/\//i.test(trimmedValue) ||
+      /^\/\//.test(trimmedValue) ||
+      /^\//.test(trimmedValue)
+    ) {
+      return trimmedValue;
+    }
   }
 
   if (Array.isArray(value)) {
@@ -314,11 +321,23 @@ function extractAssetUrl(value) {
   }
 
   const directKeys = [
+    "downloadUrl",
+    "download_url",
+    "fileUrl",
+    "file_url",
+    "signedUrl",
+    "signed_url",
+    "src",
     "videoUrl",
     "video_url",
     "resultUrl",
+    "result_url",
+    "resultImageUrl",
+    "result_image_url",
     "outputUrl",
     "output_url",
+    "downloadLink",
+    "download_link",
     "imageUrl",
     "image_url",
     "url"
@@ -334,8 +353,11 @@ function extractAssetUrl(value) {
 
   const collectionKeys = [
     "resultUrls",
+    "result_urls",
     "videoUrls",
     "video_urls",
+    "imageUrls",
+    "image_urls",
     "videos",
     "images",
     "outputs",
@@ -353,6 +375,36 @@ function extractAssetUrl(value) {
   return "";
 }
 
+function normalizeAssetUrl(url) {
+  if (!url || typeof url !== "string") {
+    return "";
+  }
+
+  const trimmedUrl = url.trim();
+
+  if (!trimmedUrl) {
+    return "";
+  }
+
+  if (/^https?:\/\//i.test(trimmedUrl)) {
+    return trimmedUrl;
+  }
+
+  if (/^\/\//.test(trimmedUrl)) {
+    return `https:${trimmedUrl}`;
+  }
+
+  if (/^\//.test(trimmedUrl)) {
+    try {
+      return new URL(trimmedUrl, PROXY || window.location.origin).toString();
+    } catch {
+      return trimmedUrl;
+    }
+  }
+
+  return "";
+}
+
 function parseResultUrl(result) {
   if (!result) {
     return "";
@@ -361,13 +413,13 @@ function parseResultUrl(result) {
   const veoResultUrl = getVeoResultUrl(result);
 
   if (veoResultUrl) {
-    return veoResultUrl;
+    return normalizeAssetUrl(veoResultUrl);
   }
 
   const directUrl = extractAssetUrl(result);
 
   if (directUrl) {
-    return directUrl;
+    return normalizeAssetUrl(directUrl);
   }
 
   if (!result.resultJson) {
@@ -380,9 +432,36 @@ function parseResultUrl(result) {
         ? JSON.parse(result.resultJson)
         : result.resultJson;
 
-    return extractAssetUrl(parsed);
+    return normalizeAssetUrl(extractAssetUrl(parsed));
   } catch {
     return "";
+  }
+}
+
+async function resolveRenderableImageUrl(url) {
+  if (!url) return "";
+
+  try {
+    const parsedUrl = new URL(url);
+    const looksLikeTempDownloadHost = /(^|\.)aiquickdraw\.com$/i.test(parsedUrl.hostname);
+
+    if (!looksLikeTempDownloadHost) {
+      return url;
+    }
+
+    const response = await fetch(url);
+    if (!response.ok) {
+      return url;
+    }
+
+    const blob = await response.blob();
+    if (!blob.type.startsWith("image/")) {
+      return url;
+    }
+
+    return URL.createObjectURL(blob);
+  } catch {
+    return url;
   }
 }
 
@@ -716,7 +795,7 @@ function SceneCard({
         {imageState?.url && (
           <div style={{ marginBottom: 10 }}>
             <img
-              src={imageState.url}
+              src={imageState.renderUrl || imageState.url}
               alt={`Scene ${scene.id}`}
               style={{
                 width: "100%",
@@ -1129,9 +1208,14 @@ export default function App() {
             return;
           }
 
+          const renderableUrl = isImgType
+            ? await resolveRenderableImageUrl(assetUrl)
+            : assetUrl;
+
           updateRunAssets(sceneId, {
             [isImgType ? "image" : "video"]: {
               url: assetUrl,
+              renderUrl: renderableUrl,
               status: "success",
               taskId
             }
@@ -1143,6 +1227,7 @@ export default function App() {
               ...current[sceneId],
               status: "success",
               url: assetUrl,
+              renderUrl: renderableUrl,
               taskId
             }
           }));
@@ -1227,7 +1312,11 @@ export default function App() {
       if (!sourceImage?.url) return;
       setImages((current) => ({
         ...current,
-        [targetSceneId]: { url: sourceImage.url, status: "success" }
+        [targetSceneId]: {
+          url: sourceImage.url,
+          renderUrl: sourceImage.renderUrl || sourceImage.url,
+          status: "success"
+        }
       }));
     },
     [images]
@@ -1906,7 +1995,7 @@ export default function App() {
 
                             {asset?.image?.url && (
                               <img
-                                src={asset.image.url}
+                                src={asset.image.renderUrl || asset.image.url}
                                 alt={`${run.name} scene ${scene.id}`}
                                 style={{
                                   width: "100%",
