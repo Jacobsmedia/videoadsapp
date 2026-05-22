@@ -453,7 +453,9 @@ function SceneCard({
   onGenerateImage,
   onApproveImage,
   onRegenerateImage,
-  onGenerateVideo
+  onGenerateVideo,
+  availableSourceScenes,
+  onReuseImage
 }) {
   const isBaseScene = scene.id === 1;
   const waitingForBase = !isBaseScene && !baseUrl;
@@ -764,6 +766,31 @@ function SceneCard({
             </span>
           )}
         </div>
+
+        {availableSourceScenes?.length > 0 && (
+          <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 11, color: "#6d6d88" }}>Reuse image from:</span>
+            {availableSourceScenes.map((src) => (
+              <button
+                key={src.id}
+                type="button"
+                onClick={() => onReuseImage(src.id)}
+                style={{
+                  padding: "3px 10px",
+                  borderRadius: 8,
+                  border: "1px solid #44445b",
+                  background: "transparent",
+                  color: "#9a9ab5",
+                  fontSize: 11,
+                  cursor: "pointer",
+                  fontWeight: 600
+                }}
+              >
+                S{src.id}
+              </button>
+            ))}
+          </div>
+        )}
 
         {imageState?.error && (
           <div style={{ fontSize: 11, color: "#f85149", marginTop: 6 }}>
@@ -1160,6 +1187,18 @@ export default function App() {
       });
     },
     [images, updateRunAssets]
+  );
+
+  const reuseImage = useCallback(
+    (targetSceneId, sourceSceneId) => {
+      const sourceImage = images[sourceSceneId];
+      if (!sourceImage?.url) return;
+      setImages((current) => ({
+        ...current,
+        [targetSceneId]: { url: sourceImage.url, status: "success" }
+      }));
+    },
+    [images]
   );
 
   const generateVideo = useCallback(
@@ -1863,6 +1902,10 @@ export default function App() {
               onApproveImage={approveImage}
               onRegenerateImage={generateImage}
               onGenerateVideo={generateVideo}
+              availableSourceScenes={scenes
+                .filter((s) => s.id !== scene.id && images[s.id]?.url)
+                .map((s) => ({ id: s.id, label: s.label }))}
+              onReuseImage={(sourceSceneId) => reuseImage(scene.id, sourceSceneId)}
             />
           ))}
         </section>
