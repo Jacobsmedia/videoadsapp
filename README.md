@@ -64,9 +64,10 @@ git push -u origin main
    - Framework preset: `Vite`
    - Build command: `npm run build`
    - Build output directory: `dist`
-8. Add an environment variable only if you want to override the built-in default:
-   - Key: `VITE_KIE_PROXY_URL`
-   - Value: `https://kie-proxy.jacobsmedia12.workers.dev`
+8. Add environment variables in Pages:
+   - `VITE_KIE_PROXY_URL` (required): your Worker API base URL.
+   - `VITE_ASSET_PUBLIC_BASE_URL` (optional): public R2 CDN/base URL like `https://media.example.com`.
+   - `VITE_ASSET_SIGNER_PATH` (optional): Worker path that returns a signed URL from an R2 key, for example `/api/v1/assets/signed-url`.
 9. Start the deployment.
 10. After deploy, open the generated `*.pages.dev` URL and test image and video requests.
 
@@ -79,3 +80,18 @@ Your Worker must allow browser requests from the Pages site. If requests fail in
 - `Access-Control-Allow-Headers`
 
 If you want, the next step can be wiring this repo to GitHub and then checking the Cloudflare Pages deploy settings together.
+
+## R2 + D1 asset hosting flow
+
+If generated image/video links are expiring or failing to stream in browser, move final assets to Cloudflare R2 and persist references in D1 via your Worker API:
+
+1. Worker stores each completed asset in R2 (object key like `runs/<runId>/scene-<id>.mp4`).
+2. Worker writes D1 metadata row per asset (`run_id`, `scene_id`, `asset_type`, `r2_key`, timestamps).
+3. Worker API returns either:
+   - a direct public URL, or
+   - an R2 key payload (`key`, `objectKey`, `r2Key`, etc.) that the app can resolve.
+4. Frontend resolves key payloads using:
+   - `VITE_ASSET_SIGNER_PATH` for signed/private delivery, or
+   - `VITE_ASSET_PUBLIC_BASE_URL` for public bucket/CDN delivery.
+
+This app now supports all of the above response formats automatically when rendering scene media.

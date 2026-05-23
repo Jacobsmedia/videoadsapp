@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getProxyUrl } from "./config.js";
+import { getAssetPublicBaseUrl, getAssetSignerPath, getProxyUrl } from "./config.js";
 import { parsePipelineJson } from "./pipeline-import.js";
 import { VideoEditor } from "./VideoEditor.jsx";
 import {
@@ -28,6 +28,8 @@ import {
 } from "./veo.js";
 
 const PROXY = getProxyUrl();
+const ASSET_PUBLIC_BASE_URL = getAssetPublicBaseUrl();
+const ASSET_SIGNER_PATH = getAssetSignerPath();
 const headers = { "Content-Type": "application/json" };
 
 const defaultScenes = [
@@ -410,6 +412,42 @@ function normalizeAssetUrl(url) {
   return "";
 }
 
+
+function composeSignedAssetUrl(assetKey) {
+  if (!assetKey || !ASSET_SIGNER_PATH) {
+    return "";
+  }
+
+  const encoded = encodeURIComponent(assetKey);
+  return `${PROXY}${ASSET_SIGNER_PATH}?key=${encoded}`;
+}
+
+function composePublicAssetUrl(assetKey) {
+  if (!assetKey || !ASSET_PUBLIC_BASE_URL) {
+    return "";
+  }
+
+  const normalizedKey = `${assetKey}`.replace(/^\/+/, "");
+  return `${ASSET_PUBLIC_BASE_URL}/${normalizedKey}`;
+}
+
+function resolveUrlFromKeyPayload(value) {
+  if (!value) {
+    return "";
+  }
+
+  if (typeof value === "string") {
+    return composeSignedAssetUrl(value) || composePublicAssetUrl(value);
+  }
+
+  if (typeof value !== "object") {
+    return "";
+  }
+
+  const key = value.key || value.path || value.objectKey || value.object_key || value.r2Key || value.r2_key;
+  return resolveUrlFromKeyPayload(key);
+}
+
 function parseResultUrl(result) {
   if (!result) {
     return "";
@@ -427,6 +465,11 @@ function parseResultUrl(result) {
     return normalizeAssetUrl(directUrl);
   }
 
+  const keyDerivedUrl = resolveUrlFromKeyPayload(result);
+  if (keyDerivedUrl) {
+    return normalizeAssetUrl(keyDerivedUrl);
+  }
+
   if (!result.resultJson) {
     return "";
   }
@@ -437,7 +480,12 @@ function parseResultUrl(result) {
         ? JSON.parse(result.resultJson)
         : result.resultJson;
 
-    return normalizeAssetUrl(extractAssetUrl(parsed));
+    const parsedUrl = extractAssetUrl(parsed);
+    if (parsedUrl) {
+      return normalizeAssetUrl(parsedUrl);
+    }
+
+    return normalizeAssetUrl(resolveUrlFromKeyPayload(parsed));
   } catch {
     return "";
   }
