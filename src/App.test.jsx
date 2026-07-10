@@ -57,7 +57,9 @@ describe("App", () => {
 
     expect(screen.getByText(/loaded 1 scenes from scenes\.json/i)).toBeInTheDocument();
     expect(screen.getByText(/requested 10s/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/video length for scene 1/i)).toHaveValue("8");
+    // Default model (Veo 3.1 Fast) only supports 8s, so 10s normalizes to 8s
+    // and the scene shows the fixed-length notice rather than a picker.
+    expect(screen.getByText(/fixed at 8s for this model/i)).toBeInTheDocument();
   });
 
   it("shows a scrollable range of length options for Kling 3.0 and keeps a valid imported value", async () => {
@@ -97,12 +99,15 @@ describe("App", () => {
       expect(screen.getByText("Uploaded Hook")).toBeInTheDocument();
     });
 
-    const lengthSelect = screen.getByLabelText(/video length for scene 1/i);
+    // Kling 3.0 supports a wide range (3-15s), so the scene renders a slider
+    // spanning that range and keeps the valid imported value of 12s.
+    const lengthSlider = screen.getByLabelText(/video length for scene 1/i);
 
-    expect(lengthSelect).toHaveValue("12");
+    expect(lengthSlider).toHaveAttribute("type", "range");
+    expect(lengthSlider).toHaveValue("12");
+    expect(lengthSlider).toHaveAttribute("min", "3");
+    expect(lengthSlider).toHaveAttribute("max", "15");
     expect(screen.queryByText(/requested 12s/i)).not.toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "3s" })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "15s" })).toBeInTheDocument();
   });
 
   it("shows a validation error for an invalid upload and keeps the current scenes", async () => {
