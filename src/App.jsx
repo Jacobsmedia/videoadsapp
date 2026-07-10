@@ -32,98 +32,49 @@ const ASSET_PUBLIC_BASE_URL = getAssetPublicBaseUrl();
 const ASSET_SIGNER_PATH = getAssetSignerPath();
 const headers = { "Content-Type": "application/json" };
 
-const defaultScenes = [
-  {
-    id: 1,
-    label: "Hook - Energetic Opening",
-    setting:
-      "Mint green tank top, sitting up on cream linen couch, bright sunlit modern living room",
-    dialogue:
-      "Calling all women over 40 who are tired of being told to just age gracefully...",
-    emotion: "Energetic, confident, leaning toward camera",
-    vidPrompt:
-      "She speaks with bold confident energy directly into the camera, eyes wide and expressive. She leans forward slightly, eyebrows raised on 'age gracefully'. Small head shake on 'tired'. Loose blonde hair shifts naturally. Handheld selfie, subtle sway. Clear natural voice with light room ambient.",
+// The app opens blank so the user builds their own scenes and script from
+// scratch. A single empty Scene 1 gives them a starting card to fill in.
+function createBlankScene(id) {
+  return {
+    id,
+    label: `Scene ${id}`,
+    setting: "",
+    dialogue: "",
+    emotion: "",
+    vidPrompt: "",
     videoLengthSeconds: 8
-  },
-  {
-    id: 2,
-    label: "Problem - Vulnerable",
-    setting:
-      "White oversized t-shirt, lying in bed propped on pillows, soft morning window light",
-    dialogue:
-      "I'm 47. For years I accepted the energy crashes, the brain fog, the slow recovery as just... getting older. Everyone said it was normal.",
-    emotion: "Vulnerable, reflective, slightly tired",
-    vidPrompt:
-      "She speaks softly, reflectively, looking into camera with a slight frown. Pauses after 'just...' with a small sigh. Eyes look down briefly then back up. Lying propped on white pillows. Handheld selfie from above, gentle sway. Clear soft voice with quiet bedroom ambient.",
-    videoLengthSeconds: 8
-  },
-  {
-    id: 3,
-    label: "Whisper - Secret Reveal",
-    setting:
-      "Cream silk slip top, reclined on beige couch with throw pillows, warm afternoon light, glass of water on side table",
-    dialogue:
-      "But here's what nobody tells you. Aging isn't inevitable. It's a treatable condition. And there's one molecule your cells run out of after 40 that changes everything.",
-    emotion: "Intimate whisper, leaning close, conspiratorial",
-    vidPrompt:
-      "She whispers intimately to the camera, leaning in close. Voice drops to a soft whisper on 'here's what nobody tells you'. Eyes widen on 'treatable condition'. Small knowing nod on 'changes everything'. Very close framing. Minimal movement. Handheld selfie very close. Whispered voice with quiet ambient.",
-    videoLengthSeconds: 8
-  },
-  {
-    id: 4,
-    label: "Credibility - Educational",
-    setting:
-      "Mint green tank top, sitting upright on cream couch, same room as scene 1, natural light",
-    dialogue:
-      "It's called NAD+. Harvard's Dr. David Sinclair has spent 30 years studying it. By 60, you have half the NAD+ you had at 40 - that's what's actually aging you.",
-    emotion: "Confident, educational, engaged eye contact",
-    vidPrompt:
-      "She speaks with confident educational energy, eye contact throughout. Gestures with left hand on 'Harvard' for emphasis. Nods on 'that's what's actually aging you'. Natural breathing, slight posture shifts. Sitting upright. Handheld selfie, subtle sway. Clear confident voice with light room ambient.",
-    videoLengthSeconds: 8
-  },
-  {
-    id: 5,
-    label: "Outcome - Excited",
-    setting:
-      "White t-shirt, sitting in bed propped on pillows, morning light, relaxed and happy",
-    dialogue:
-      "Three weeks in, my energy is back. I sleep like I'm 30. My skin is clearer than it's been in a decade. And my husband can't keep his hands off me.",
-    emotion: "Excited, genuine smile, glowing confidence",
-    vidPrompt:
-      "She speaks with growing excitement, genuine wide smile. Touches her face briefly on 'my skin'. Laughs lightly on 'can't keep his hands off me'. Eyes bright and sparkling. Sitting in bed, relaxed. Handheld selfie, subtle sway. Clear happy voice with light ambient.",
-    videoLengthSeconds: 8
-  },
-  {
-    id: 6,
-    label: "CTA - Product Reveal",
-    setting:
-      "Mint green tank top, on couch, holding NAD+ injection vial in right hand, label facing camera",
-    dialogue:
-      "From 99 dollars a month. Free consult, no insurance needed. Link below.",
-    emotion: "Calm confidence, small smile, product held up",
-    vidPrompt:
-      "She speaks with calm closing confidence, holding NAD+ vial at chest height. Lifts vial toward camera midway and tilts label so it's readable, holds elevated for final 3 seconds. Small genuine smile. Subtle nod at the end. Handheld selfie, subtle sway. Clear voice with light ambient.",
-    videoLengthSeconds: 8
-  }
-];
+  };
+}
+
+const defaultScenes = [createBlankScene(1)];
 
 const defaultBasePrompt =
   "Photorealistic iPhone front-camera selfie of a woman age 47, natural beauty, shoulder-length wavy blonde hair, soft hazel-green eyes, light freckles, no makeup or very minimal, fine natural skin texture with subtle laugh lines, warm sun-kissed complexion. Candid mid-sentence expression, mouth slightly open. Slightly grainy iPhone quality, no filter, shallow depth of field. Vertical 9:16. ";
 
-function buildPrompts(scenes, basePrompt) {
+// "avatar" mode keeps the original pipeline: Scene 1 is a text-to-image base
+// avatar and every later scene is an image-to-image edit of that same face.
+// "independent" mode treats every scene as its own text-to-image generation
+// with no shared face, so scenes can be different shots, people, or products.
+const GENERATION_MODE = { avatar: "avatar", independent: "independent" };
+
+function buildScenePrompt(scene, basePrompt, mode = GENERATION_MODE.avatar) {
+  if (mode === GENERATION_MODE.independent || scene.id === 1) {
+    return `${basePrompt}${scene.setting}. ${scene.emotion}.`;
+  }
+
+  return (
+    "Keep the exact same woman's face, features, hair color, eye color, and skin tone from the reference image. " +
+    `Change only her outfit and setting to: ${scene.setting}. ` +
+    `Expression: ${scene.emotion}. She is mid-sentence, mouth slightly open. ` +
+    "iPhone selfie, vertical 9:16, photorealistic."
+  );
+}
+
+function buildPrompts(scenes, basePrompt, mode = GENERATION_MODE.avatar) {
   const nextPrompts = {};
 
   scenes.forEach((scene) => {
-    if (scene.id === 1) {
-      nextPrompts[scene.id] = `${basePrompt}${scene.setting}. ${scene.emotion}.`;
-      return;
-    }
-
-    nextPrompts[scene.id] =
-      "Keep the exact same woman's face, features, hair color, eye color, and skin tone from the reference image. " +
-      `Change only her outfit and setting to: ${scene.setting}. ` +
-      `Expression: ${scene.emotion}. She is mid-sentence, mouth slightly open. ` +
-      "iPhone selfie, vertical 9:16, photorealistic.";
+    nextPrompts[scene.id] = buildScenePrompt(scene, basePrompt, mode);
   });
 
   return nextPrompts;
@@ -580,6 +531,7 @@ function SceneCard({
   imageState,
   videoState,
   baseUrl,
+  generationMode,
   videoModelId,
   videoLengthWarning,
   proposedVideoLength,
@@ -594,8 +546,9 @@ function SceneCard({
   onUploadProductImage,
   requiresProductImage
 }) {
-  const isBaseScene = scene.id === 1;
-  const waitingForBase = !isBaseScene && !baseUrl;
+  const avatarMode = generationMode === GENERATION_MODE.avatar;
+  const isBaseScene = avatarMode && scene.id === 1;
+  const waitingForBase = avatarMode && scene.id !== 1 && !baseUrl;
   const status = waitingForBase ? "locked" : imageState?.status || "idle";
   const selectedModel = getVideoModelById(videoModelId);
   const supportedLengths = getSupportedVideoLengthSeconds(videoModelId);
@@ -845,7 +798,8 @@ function SceneCard({
             marginBottom: 8
           }}
         >
-          Avatar Image {baseUrl && !isBaseScene ? "- edit from Scene 1" : ""}
+          {avatarMode ? "Avatar Image" : "Scene Image"}
+          {avatarMode && baseUrl && !isBaseScene ? " - edit from Scene 1" : ""}
         </div>
 
         {imageState?.url && (
@@ -1023,6 +977,7 @@ export default function App() {
   const [videos, setVideos] = useState({});
   const [videoModelId, setVideoModelId] = useState(DEFAULT_VIDEO_MODEL_ID);
   const [imageModelId, setImageModelId] = useState(DEFAULT_IMAGE_MODEL_ID);
+  const [generationMode, setGenerationMode] = useState(GENERATION_MODE.avatar);
   const [videoLengthWarnings, setVideoLengthWarnings] = useState(() =>
     normalizeScenesForVideoModel(defaultScenes, DEFAULT_VIDEO_MODEL_ID).warnings
   );
@@ -1144,7 +1099,9 @@ export default function App() {
         activeRunIdRef.current = null;
         setScenes(nextPipeline.scenes);
         setBasePrompt(uploadedPipeline.basePrompt);
-        setPrompts(buildPrompts(nextPipeline.scenes, uploadedPipeline.basePrompt));
+        setPrompts(
+          buildPrompts(nextPipeline.scenes, uploadedPipeline.basePrompt, generationMode)
+        );
         setImages({});
         setVideos({});
         setActiveRunId(null);
@@ -1164,7 +1121,7 @@ export default function App() {
         event.target.value = "";
       }
     },
-    [clearAllTimers, videoModelId]
+    [clearAllTimers, generationMode, videoModelId]
   );
 
   const handleVideoModelChange = useCallback((nextModelId) => {
@@ -1209,38 +1166,61 @@ export default function App() {
       // Build the image-generation prompt so the inserted scene can be generated.
       setPrompts((current) => ({
         ...current,
-        ...buildPrompts([newScene], basePrompt)
+        ...buildPrompts([newScene], basePrompt, generationMode)
       }));
 
       return newId;
     },
-    [scenes, basePrompt]
+    [scenes, basePrompt, generationMode]
   );
 
-  const removeScene = useCallback((sceneId) => {
-    // Scene 1 is the base avatar every other scene edits from - it must stay.
-    if (sceneId === 1) {
-      return;
-    }
+  const handleGenerationModeChange = useCallback(
+    (nextMode) => {
+      setGenerationMode(nextMode);
+      // Rebuild every scene's image prompt for the new mode (text-to-image vs
+      // image-to-image), keeping any prompt the user hasn't touched in sync.
+      setScenes((current) => {
+        setPrompts(buildPrompts(current, basePrompt, nextMode));
+        return current;
+      });
+    },
+    [basePrompt]
+  );
 
-    setScenes((current) =>
-      current.length <= 1 ? current : current.filter((scene) => scene.id !== sceneId)
-    );
+  const removeScene = useCallback(
+    (sceneId) => {
+      // In avatar mode Scene 1 is the base every other scene edits from, so it
+      // must stay. In independent mode any scene can be removed.
+      if (generationMode === GENERATION_MODE.avatar && sceneId === 1) {
+        return;
+      }
 
-    const withoutScene = (map) => {
-      const next = { ...map };
-      delete next[sceneId];
-      return next;
-    };
+      setScenes((current) => {
+        if (current.length <= 1) {
+          return current;
+        }
 
-    setPrompts(withoutScene);
-    setImages(withoutScene);
-    setVideos(withoutScene);
-    setProductImages(withoutScene);
-    setProposedVideoLengths(withoutScene);
-    setVideoLengthWarnings(withoutScene);
-    setEditSceneId((current) => (current === sceneId ? 1 : current));
-  }, []);
+        const next = current.filter((scene) => scene.id !== sceneId);
+        // If we removed the scene being edited, jump to the first remaining one.
+        setEditSceneId((editing) => (editing === sceneId ? next[0].id : editing));
+        return next;
+      });
+
+      const withoutScene = (map) => {
+        const next = { ...map };
+        delete next[sceneId];
+        return next;
+      };
+
+      setPrompts(withoutScene);
+      setImages(withoutScene);
+      setVideos(withoutScene);
+      setProductImages(withoutScene);
+      setProposedVideoLengths(withoutScene);
+      setVideoLengthWarnings(withoutScene);
+    },
+    [generationMode]
+  );
 
   const toggleRunExpanded = useCallback((runId) => {
     setExpandedRunIds((current) => ({
@@ -1391,10 +1371,11 @@ export default function App() {
 
       try {
         const model = getImageModelById(imageModelId);
-        const body =
-          sceneId === 1
-            ? model.buildT2iBody(prompts[sceneId])
-            : model.buildI2iBody(prompts[sceneId], [baseUrl]);
+        const useText2Img =
+          generationMode === GENERATION_MODE.independent || sceneId === 1;
+        const body = useText2Img
+          ? model.buildT2iBody(prompts[sceneId])
+          : model.buildI2iBody(prompts[sceneId], [baseUrl]);
         const taskId = await createImageTask(body, model.createPath);
 
         setImages((current) => ({
@@ -1409,7 +1390,7 @@ export default function App() {
         }));
       }
     },
-    [baseUrl, ensureActiveRun, imageModelId, pollTask, prompts]
+    [baseUrl, ensureActiveRun, generationMode, imageModelId, pollTask, prompts]
   );
 
   const approveImage = useCallback(
@@ -1503,19 +1484,24 @@ export default function App() {
     [ensureActiveRun, images, pollTask, productImages, scenes, videoModelId]
   );
 
-  const generateAllRemaining = useCallback(() => {
+  const generateAllImages = useCallback(() => {
     scenes.forEach((scene) => {
       const imageState = images[scene.id];
-      const shouldGenerate =
-        scene.id !== 1 &&
-        baseUrl &&
-        (!imageState || imageState.status === "idle" || imageState.status === "fail");
+      const isIdle =
+        !imageState || imageState.status === "idle" || imageState.status === "fail";
 
-      if (shouldGenerate) {
+      if (!isIdle) {
+        return;
+      }
+
+      if (generationMode === GENERATION_MODE.independent) {
+        // Every scene is generated on its own - no base avatar to wait for.
+        generateImage(scene.id);
+      } else if (scene.id !== 1 && baseUrl) {
         generateImage(scene.id);
       }
     });
-  }, [baseUrl, generateImage, images]);
+  }, [baseUrl, generateImage, generationMode, images, scenes]);
 
   const generateAllVideos = useCallback(() => {
     scenes.forEach((scene) => {
@@ -1594,8 +1580,9 @@ export default function App() {
                   fontSize: 14
                 }}
               >
-                Generate a base avatar, lock the face, spin up the remaining scenes,
-                then send approved stills into Veo.
+                {generationMode === GENERATION_MODE.avatar
+                  ? "Generate a base avatar, lock the face, spin up the remaining scenes, then send approved stills into Veo."
+                  : "Add your own scenes and script, generate each still on its own, then send approved frames into Veo."}
               </p>
             </div>
           </div>
@@ -1643,24 +1630,68 @@ export default function App() {
             })}
           </div>
 
+          <div
+            style={{
+              display: "flex",
+              gap: 8,
+              alignItems: "center",
+              flexWrap: "wrap",
+              marginBottom: 14
+            }}
+          >
+            <span style={{ fontSize: 12, color: "#9fa4c6", fontWeight: 700 }}>
+              Scene mode:
+            </span>
+            {[
+              { id: GENERATION_MODE.avatar, label: "Consistent avatar" },
+              { id: GENERATION_MODE.independent, label: "Independent scenes" }
+            ].map((mode) => {
+              const active = generationMode === mode.id;
+              return (
+                <button
+                  key={mode.id}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => handleGenerationModeChange(mode.id)}
+                  style={{
+                    ...buttonStyle(active ? "#a855f7" : "#44445b", active),
+                    color: active ? "#ffffff" : "#9a9ab5",
+                    background: active ? "#a855f7" : "transparent",
+                    padding: "6px 12px"
+                  }}
+                >
+                  {mode.label}
+                </button>
+              );
+            })}
+            <span style={{ fontSize: 11, color: "#6d6d88", flexBasis: "100%" }}>
+              {generationMode === GENERATION_MODE.avatar
+                ? "Scene 1 sets the face; later scenes reuse it for a consistent avatar."
+                : "Each scene is generated on its own from its own prompt - no shared face."}
+            </span>
+          </div>
+
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <label style={{ fontSize: 12, color: "#9fa4c6", fontWeight: 700 }}>
-              Upload reference avatar:
-              <input
-                type="file"
-                accept="image/*"
-                style={{ display: "block", marginTop: 6 }}
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  if (!file) return;
-                  setCustomAvatar({
-                    name: file.name,
-                    previewUrl: URL.createObjectURL(file)
-                  });
-                }}
-              />
-            </label>
-            {!baseUrl && (
+            {generationMode === GENERATION_MODE.avatar && (
+              <label style={{ fontSize: 12, color: "#9fa4c6", fontWeight: 700 }}>
+                Upload reference avatar:
+                <input
+                  type="file"
+                  accept="image/*"
+                  style={{ display: "block", marginTop: 6 }}
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (!file) return;
+                    setCustomAvatar({
+                      name: file.name,
+                      previewUrl: URL.createObjectURL(file)
+                    });
+                  }}
+                />
+              </label>
+            )}
+
+            {generationMode === GENERATION_MODE.avatar && !baseUrl && (
               <button
                 type="button"
                 onClick={() => generateImage(1)}
@@ -1675,13 +1706,23 @@ export default function App() {
               </button>
             )}
 
-            {baseUrl && (
+            {generationMode === GENERATION_MODE.avatar && baseUrl && (
               <button
                 type="button"
-                onClick={generateAllRemaining}
+                onClick={generateAllImages}
                 style={buttonStyle("#34d058", true)}
               >
                 2. Generate All Remaining Scenes
+              </button>
+            )}
+
+            {generationMode === GENERATION_MODE.independent && (
+              <button
+                type="button"
+                onClick={generateAllImages}
+                style={buttonStyle("#34d058", true)}
+              >
+                Generate All Images
               </button>
             )}
 
@@ -1695,7 +1736,9 @@ export default function App() {
                   background: "#a855f7"
                 }}
               >
-                3. Generate All Videos
+                {generationMode === GENERATION_MODE.avatar
+                  ? "3. Generate All Videos"
+                  : "Generate All Videos"}
               </button>
             )}
           </div>
@@ -1842,7 +1885,10 @@ export default function App() {
                       padding: "6px 10px"
                     }}
                   >
-                    S{scene.id} {scene.id === 1 ? "(text2img)" : "(edit)"}
+                    S{scene.id}{" "}
+                    {generationMode === GENERATION_MODE.independent || scene.id === 1
+                      ? "(text2img)"
+                      : "(edit)"}
                   </button>
                 ))}
                 <button
@@ -1891,38 +1937,26 @@ export default function App() {
                   );
                 };
 
-                const rebuildImagePrompt = () => {
-                  setScenes((current) => {
-                    const updated = current.map((s) =>
-                      s.id === editSceneId
-                        ? { ...s }
-                        : s
-                    );
-                    setPrompts((currentPrompts) => ({
-                      ...currentPrompts,
-                      ...buildPrompts(
-                        updated.filter((s) => s.id === editSceneId),
-                        basePrompt
-                      )
-                    }));
-                    return updated;
-                  });
-                };
+                const independentMode =
+                  generationMode === GENERATION_MODE.independent;
 
                 return (
                   <div style={{ display: "grid", gap: 14 }}>
-                    {editSceneId === 1 && (
+                    {(editSceneId === 1 || independentMode) && (
                       <div>
-                        <label style={labelStyle}>Base avatar prompt (used to build Scene 1 image prompt):</label>
+                        <label style={labelStyle}>
+                          {independentMode
+                            ? "Global style prompt (prepended to every scene's image prompt):"
+                            : "Base avatar prompt (used to build Scene 1 image prompt):"}
+                        </label>
                         <textarea
                           value={basePrompt}
                           rows={3}
                           onChange={(e) => {
                             setBasePrompt(e.target.value);
-                            setPrompts((current) => ({
-                              ...current,
-                              1: `${e.target.value}${activeScene.setting}. ${activeScene.emotion}.`
-                            }));
+                            // Style prompt feeds every text-to-image scene, so
+                            // rebuild all prompts for the current mode.
+                            setPrompts(buildPrompts(scenes, e.target.value, generationMode));
                           }}
                           style={fieldStyle}
                         />
@@ -1947,19 +1981,14 @@ export default function App() {
                         rows={2}
                         onChange={(e) => {
                           updateScene("setting", e.target.value);
-                          setPrompts((current) => {
-                            if (editSceneId === 1) {
-                              return { ...current, 1: `${basePrompt}${e.target.value}. ${activeScene.emotion}.` };
-                            }
-                            return {
-                              ...current,
-                              [editSceneId]:
-                                "Keep the exact same woman's face, features, hair color, eye color, and skin tone from the reference image. " +
-                                `Change only her outfit and setting to: ${e.target.value}. ` +
-                                `Expression: ${activeScene.emotion}. She is mid-sentence, mouth slightly open. ` +
-                                "iPhone selfie, vertical 9:16, photorealistic."
-                            };
-                          });
+                          setPrompts((current) => ({
+                            ...current,
+                            [editSceneId]: buildScenePrompt(
+                              { ...activeScene, setting: e.target.value },
+                              basePrompt,
+                              generationMode
+                            )
+                          }));
                         }}
                         style={fieldStyle}
                       />
@@ -1972,19 +2001,14 @@ export default function App() {
                         rows={2}
                         onChange={(e) => {
                           updateScene("emotion", e.target.value);
-                          setPrompts((current) => {
-                            if (editSceneId === 1) {
-                              return { ...current, 1: `${basePrompt}${activeScene.setting}. ${e.target.value}.` };
-                            }
-                            return {
-                              ...current,
-                              [editSceneId]:
-                                "Keep the exact same woman's face, features, hair color, eye color, and skin tone from the reference image. " +
-                                `Change only her outfit and setting to: ${activeScene.setting}. ` +
-                                `Expression: ${e.target.value}. She is mid-sentence, mouth slightly open. ` +
-                                "iPhone selfie, vertical 9:16, photorealistic."
-                            };
-                          });
+                          setPrompts((current) => ({
+                            ...current,
+                            [editSceneId]: buildScenePrompt(
+                              { ...activeScene, emotion: e.target.value },
+                              basePrompt,
+                              generationMode
+                            )
+                          }));
                         }}
                         style={fieldStyle}
                       />
@@ -2002,9 +2026,11 @@ export default function App() {
 
                     <div>
                       <label style={labelStyle}>
-                        {editSceneId === 1
-                          ? "Image generation prompt (auto-built from base prompt + setting + emotion):"
-                          : "Image generation prompt (auto-built from setting + emotion):"}
+                        {independentMode
+                          ? "Image generation prompt (text-to-image, auto-built from style + setting + emotion):"
+                          : editSceneId === 1
+                            ? "Image generation prompt (auto-built from base prompt + setting + emotion):"
+                            : "Image generation prompt (image-to-image edit, auto-built from setting + emotion):"}
                       </label>
                       <textarea
                         value={prompts[editSceneId] || ""}
@@ -2022,7 +2048,7 @@ export default function App() {
                       </div>
                     </div>
 
-                    {editSceneId !== 1 && (
+                    {(independentMode || editSceneId !== 1) && scenes.length > 1 && (
                       <div style={{ borderTop: "1px solid #242438", paddingTop: 12 }}>
                         <button
                           type="button"
@@ -2226,6 +2252,7 @@ export default function App() {
               imageState={images[scene.id]}
               videoState={videos[scene.id]}
               baseUrl={baseUrl}
+              generationMode={generationMode}
               videoModelId={videoModelId}
               videoLengthWarning={videoLengthWarnings[scene.id]}
               proposedVideoLength={proposedVideoLengths[scene.id]}

@@ -123,7 +123,46 @@ describe("App", () => {
       expect(screen.getByText(/scene 1 is missing "label"/i)).toBeInTheDocument();
     });
 
-    expect(screen.getByText("Hook - Energetic Opening")).toBeInTheDocument();
+    // The app starts blank with a single "Scene 1" card, which must survive.
+    expect(screen.getByRole("heading", { name: "Scene 1" })).toBeInTheDocument();
+  });
+
+  it("starts blank with a single editable Scene 1", () => {
+    render(<App />);
+
+    expect(screen.getByRole("heading", { name: "Scene 1" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Scene 2" })).not.toBeInTheDocument();
+  });
+
+  it("lets the user insert and remove scenes from the editor", () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: /edit scenes & script/i }));
+    // The scene editor's own "+ Add Scene" is the first of two on the page.
+    fireEvent.click(screen.getAllByRole("button", { name: /\+ add scene/i })[0]);
+
+    expect(screen.getByRole("heading", { name: "Scene 2" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /remove scene 2/i }));
+
+    expect(screen.queryByRole("heading", { name: "Scene 2" })).not.toBeInTheDocument();
+  });
+
+  it("switches to independent scene mode and swaps the generate action", () => {
+    render(<App />);
+
+    expect(
+      screen.getByRole("button", { name: /generate base avatar/i })
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /independent scenes/i }));
+
+    expect(
+      screen.getByRole("button", { name: /generate all images/i })
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /generate base avatar/i })
+    ).not.toBeInTheDocument();
   });
 
   it("shows a new run folder after a generated asset is recorded", async () => {
