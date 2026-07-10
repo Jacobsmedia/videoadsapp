@@ -1192,26 +1192,55 @@ export default function App() {
   }, []);
 
   const addScene = useCallback(
-    (sceneData) => {
-      setScenes((current) => {
-        const maxId = current.reduce((m, s) => Math.max(m, s.id), 0);
-        const newId = maxId + 1;
-        return [
-          ...current,
-          {
-            id: newId,
-            label: sceneData.label,
-            setting: sceneData.setting || "",
-            dialogue: sceneData.dialogue || "",
-            emotion: sceneData.emotion || "",
-            vidPrompt: sceneData.vidPrompt || "",
-            videoLengthSeconds: sceneData.videoLengthSeconds || 8
-          }
-        ];
-      });
+    (sceneData = {}) => {
+      const maxId = scenes.reduce((m, s) => Math.max(m, s.id), 0);
+      const newId = maxId + 1;
+      const newScene = {
+        id: newId,
+        label: sceneData.label || `Scene ${newId}`,
+        setting: sceneData.setting || "",
+        dialogue: sceneData.dialogue || "",
+        emotion: sceneData.emotion || "",
+        vidPrompt: sceneData.vidPrompt || "",
+        videoLengthSeconds: sceneData.videoLengthSeconds || 8
+      };
+
+      setScenes((current) => [...current, newScene]);
+      // Build the image-generation prompt so the inserted scene can be generated.
+      setPrompts((current) => ({
+        ...current,
+        ...buildPrompts([newScene], basePrompt)
+      }));
+
+      return newId;
     },
-    []
+    [scenes, basePrompt]
   );
+
+  const removeScene = useCallback((sceneId) => {
+    // Scene 1 is the base avatar every other scene edits from - it must stay.
+    if (sceneId === 1) {
+      return;
+    }
+
+    setScenes((current) =>
+      current.length <= 1 ? current : current.filter((scene) => scene.id !== sceneId)
+    );
+
+    const withoutScene = (map) => {
+      const next = { ...map };
+      delete next[sceneId];
+      return next;
+    };
+
+    setPrompts(withoutScene);
+    setImages(withoutScene);
+    setVideos(withoutScene);
+    setProductImages(withoutScene);
+    setProposedVideoLengths(withoutScene);
+    setVideoLengthWarnings(withoutScene);
+    setEditSceneId((current) => (current === sceneId ? 1 : current));
+  }, []);
 
   const toggleRunExpanded = useCallback((runId) => {
     setExpandedRunIds((current) => ({
@@ -1765,7 +1794,7 @@ export default function App() {
             onClick={() => setEditSceneId(editSceneId ? null : 1)}
             style={buttonStyle("#666680")}
           >
-            {editSceneId ? "Hide Prompts" : "Edit Prompts"}
+            {editSceneId ? "Hide Scenes & Script" : "Edit Scenes & Script"}
           </button>
           <button
             type="button"
@@ -1816,6 +1845,19 @@ export default function App() {
                     S{scene.id} {scene.id === 1 ? "(text2img)" : "(edit)"}
                   </button>
                 ))}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const newId = addScene();
+                    setEditSceneId(newId);
+                  }}
+                  style={{
+                    ...buttonStyle("#34d058"),
+                    padding: "6px 10px"
+                  }}
+                >
+                  + Add Scene
+                </button>
               </div>
 
               {(() => {
@@ -1979,6 +2021,21 @@ export default function App() {
                         {(prompts[editSceneId] || "").length} chars · edit directly or change fields above to auto-rebuild
                       </div>
                     </div>
+
+                    {editSceneId !== 1 && (
+                      <div style={{ borderTop: "1px solid #242438", paddingTop: 12 }}>
+                        <button
+                          type="button"
+                          onClick={() => removeScene(editSceneId)}
+                          style={buttonStyle("#f85149")}
+                        >
+                          Remove Scene {editSceneId}
+                        </button>
+                        <div style={{ marginTop: 4, fontSize: 10, color: "#5f607a" }}>
+                          Deletes this scene and any generated image/video for it.
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })()}
