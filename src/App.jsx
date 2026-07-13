@@ -33,80 +33,6 @@ const ASSET_PUBLIC_BASE_URL = getAssetPublicBaseUrl();
 const ASSET_SIGNER_PATH = getAssetSignerPath();
 const headers = { "Content-Type": "application/json" };
 
-const defaultScenes = [
-  {
-    id: 1,
-    label: "Hook - Energetic Opening",
-    setting:
-      "Mint green tank top, sitting up on cream linen couch, bright sunlit modern living room",
-    dialogue:
-      "Calling all women over 40 who are tired of being told to just age gracefully...",
-    emotion: "Energetic, confident, leaning toward camera",
-    vidPrompt:
-      "She speaks with bold confident energy directly into the camera, eyes wide and expressive. She leans forward slightly, eyebrows raised on 'age gracefully'. Small head shake on 'tired'. Loose blonde hair shifts naturally. Handheld selfie, subtle sway. Clear natural voice with light room ambient.",
-    videoLengthSeconds: 8
-  },
-  {
-    id: 2,
-    label: "Problem - Vulnerable",
-    setting:
-      "White oversized t-shirt, lying in bed propped on pillows, soft morning window light",
-    dialogue:
-      "I'm 47. For years I accepted the energy crashes, the brain fog, the slow recovery as just... getting older. Everyone said it was normal.",
-    emotion: "Vulnerable, reflective, slightly tired",
-    vidPrompt:
-      "She speaks softly, reflectively, looking into camera with a slight frown. Pauses after 'just...' with a small sigh. Eyes look down briefly then back up. Lying propped on white pillows. Handheld selfie from above, gentle sway. Clear soft voice with quiet bedroom ambient.",
-    videoLengthSeconds: 8
-  },
-  {
-    id: 3,
-    label: "Whisper - Secret Reveal",
-    setting:
-      "Cream silk slip top, reclined on beige couch with throw pillows, warm afternoon light, glass of water on side table",
-    dialogue:
-      "But here's what nobody tells you. Aging isn't inevitable. It's a treatable condition. And there's one molecule your cells run out of after 40 that changes everything.",
-    emotion: "Intimate whisper, leaning close, conspiratorial",
-    vidPrompt:
-      "She whispers intimately to the camera, leaning in close. Voice drops to a soft whisper on 'here's what nobody tells you'. Eyes widen on 'treatable condition'. Small knowing nod on 'changes everything'. Very close framing. Minimal movement. Handheld selfie very close. Whispered voice with quiet ambient.",
-    videoLengthSeconds: 8
-  },
-  {
-    id: 4,
-    label: "Credibility - Educational",
-    setting:
-      "Mint green tank top, sitting upright on cream couch, same room as scene 1, natural light",
-    dialogue:
-      "It's called NAD+. Harvard's Dr. David Sinclair has spent 30 years studying it. By 60, you have half the NAD+ you had at 40 - that's what's actually aging you.",
-    emotion: "Confident, educational, engaged eye contact",
-    vidPrompt:
-      "She speaks with confident educational energy, eye contact throughout. Gestures with left hand on 'Harvard' for emphasis. Nods on 'that's what's actually aging you'. Natural breathing, slight posture shifts. Sitting upright. Handheld selfie, subtle sway. Clear confident voice with light room ambient.",
-    videoLengthSeconds: 8
-  },
-  {
-    id: 5,
-    label: "Outcome - Excited",
-    setting:
-      "White t-shirt, sitting in bed propped on pillows, morning light, relaxed and happy",
-    dialogue:
-      "Three weeks in, my energy is back. I sleep like I'm 30. My skin is clearer than it's been in a decade. And my husband can't keep his hands off me.",
-    emotion: "Excited, genuine smile, glowing confidence",
-    vidPrompt:
-      "She speaks with growing excitement, genuine wide smile. Touches her face briefly on 'my skin'. Laughs lightly on 'can't keep his hands off me'. Eyes bright and sparkling. Sitting in bed, relaxed. Handheld selfie, subtle sway. Clear happy voice with light ambient.",
-    videoLengthSeconds: 8
-  },
-  {
-    id: 6,
-    label: "CTA - Product Reveal",
-    setting:
-      "Mint green tank top, on couch, holding NAD+ injection vial in right hand, label facing camera",
-    dialogue:
-      "From 99 dollars a month. Free consult, no insurance needed. Link below.",
-    emotion: "Calm confidence, small smile, product held up",
-    vidPrompt:
-      "She speaks with calm closing confidence, holding NAD+ vial at chest height. Lifts vial toward camera midway and tilts label so it's readable, holds elevated for final 3 seconds. Small genuine smile. Subtle nod at the end. Handheld selfie, subtle sway. Clear voice with light ambient.",
-    videoLengthSeconds: 8
-  }
-];
 
 const defaultBasePrompt =
   "Photorealistic iPhone front-camera selfie of a woman age 47, natural beauty, shoulder-length wavy blonde hair, soft hazel-green eyes, light freckles, no makeup or very minimal, fine natural skin texture with subtle laugh lines, warm sun-kissed complexion. Candid mid-sentence expression, mouth slightly open. Slightly grainy iPhone quality, no filter, shallow depth of field. Vertical 9:16. ";
@@ -1016,17 +942,15 @@ function SceneCard({
 }
 
 export default function App() {
-  const [scenes, setScenes] = useState(() =>
-    normalizeScenesForVideoModel(defaultScenes, DEFAULT_VIDEO_MODEL_ID).scenes
-  );
+  // Every new video starts from scratch: no scenes until a scene pack is
+  // uploaded or pasted in.
+  const [scenes, setScenes] = useState([]);
   const [basePrompt, setBasePrompt] = useState(defaultBasePrompt);
   const [images, setImages] = useState({});
   const [videos, setVideos] = useState({});
   const [videoModelId, setVideoModelId] = useState(DEFAULT_VIDEO_MODEL_ID);
   const [imageModelId, setImageModelId] = useState(DEFAULT_IMAGE_MODEL_ID);
-  const [videoLengthWarnings, setVideoLengthWarnings] = useState(() =>
-    normalizeScenesForVideoModel(defaultScenes, DEFAULT_VIDEO_MODEL_ID).warnings
-  );
+  const [videoLengthWarnings, setVideoLengthWarnings] = useState({});
   const [proposedVideoLengths, setProposedVideoLengths] = useState({});
   const [runs, setRuns] = useState([]);
   const [customAvatar, setCustomAvatar] = useState(null);
@@ -1038,21 +962,18 @@ export default function App() {
   const [showScenePackPanel, setShowScenePackPanel] = useState(false);
   const [scenePackText, setScenePackText] = useState("");
   const [pendingScenePack, setPendingScenePack] = useState(null);
-  const [prompts, setPrompts] = useState(() =>
-    buildPrompts(
-      normalizeScenesForVideoModel(defaultScenes, DEFAULT_VIDEO_MODEL_ID).scenes,
-      defaultBasePrompt
-    )
-  );
+  const [prompts, setPrompts] = useState({});
   const timers = useRef({});
   const fileInputRef = useRef(null);
+  const scenePackFileInputRef = useRef(null);
   const activeRunIdRef = useRef(null);
 
   const baseUrl = images[1]?.status === "approved" ? images[1].url : null;
   const approvedCount = Object.values(images).filter(
     (image) => image?.status === "approved"
   ).length;
-  const allApproved = scenes.every((scene) => images[scene.id]?.status === "approved");
+  const allApproved =
+    scenes.length > 0 && scenes.every((scene) => images[scene.id]?.status === "approved");
 
   const clearAllTimers = useCallback(() => {
     Object.values(timers.current).forEach(clearInterval);
@@ -1171,23 +1092,11 @@ export default function App() {
     [clearAllTimers, videoModelId]
   );
 
-  // Validate the pasted scene-pack JSON. On success we stash the parsed drafts and
-  // let the user choose whether to replace or append (see applyScenePack below).
-  const handleScenePackParse = useCallback(() => {
-    try {
-      const drafts = parseScenePack(scenePackText);
-      setPendingScenePack(drafts);
-      setImportMessage(null);
-    } catch (error) {
-      setPendingScenePack(null);
-      setImportMessage({ type: "error", text: error.message });
-    }
-  }, [scenePackText]);
-
-  const applyScenePack = useCallback(
-    (mode) => {
-      const drafts = pendingScenePack;
-      if (!drafts) {
+  // Turn parsed scene-pack drafts into live scenes. Shared by the paste flow, the
+  // file upload, and (later) any external app that hands us a parsed pack.
+  const applyScenePackDrafts = useCallback(
+    (drafts, mode) => {
+      if (!drafts || drafts.length === 0) {
         return;
       }
 
@@ -1250,7 +1159,53 @@ export default function App() {
       setScenePackText("");
       setShowScenePackPanel(false);
     },
-    [pendingScenePack, scenes, videoModelId, clearAllTimers]
+    [scenes, videoModelId, clearAllTimers]
+  );
+
+  // Decide how an incoming pack lands: an empty project just loads it (starting
+  // from scratch), otherwise we ask whether to replace or append.
+  const beginScenePackImport = useCallback(
+    (drafts) => {
+      if (scenes.length === 0) {
+        applyScenePackDrafts(drafts, "replace");
+      } else {
+        setPendingScenePack(drafts);
+        setImportMessage(null);
+      }
+    },
+    [scenes, applyScenePackDrafts]
+  );
+
+  // Validate the pasted scene-pack JSON, then hand off to beginScenePackImport.
+  const handleScenePackParse = useCallback(() => {
+    try {
+      beginScenePackImport(parseScenePack(scenePackText));
+    } catch (error) {
+      setPendingScenePack(null);
+      setImportMessage({ type: "error", text: error.message });
+    }
+  }, [scenePackText, beginScenePackImport]);
+
+  // Read an uploaded .json scene-pack file and import it the same way.
+  const handleScenePackFileUpload = useCallback(
+    async (event) => {
+      const file = event.target.files?.[0];
+      if (!file) {
+        return;
+      }
+
+      try {
+        const drafts = parseScenePack(await readFileText(file));
+        setShowScenePackPanel(false);
+        beginScenePackImport(drafts);
+      } catch (error) {
+        setPendingScenePack(null);
+        setImportMessage({ type: "error", text: error.message });
+      } finally {
+        event.target.value = "";
+      }
+    },
+    [beginScenePackImport]
   );
 
   const exportScenePack = useCallback(async () => {
@@ -1782,7 +1737,7 @@ export default function App() {
                 }}
               />
             </label>
-            {!baseUrl && (
+            {scenes.length > 0 && !baseUrl && (
               <button
                 type="button"
                 onClick={() => generateImage(1)}
@@ -1935,6 +1890,21 @@ export default function App() {
           />
           <button
             type="button"
+            onClick={() => scenePackFileInputRef.current?.click()}
+            style={buttonStyle("#a855f7")}
+          >
+            Upload Scene Pack
+          </button>
+          <input
+            ref={scenePackFileInputRef}
+            type="file"
+            accept=".json,application/json"
+            aria-label="Upload Scene Pack JSON"
+            style={{ display: "none" }}
+            onChange={handleScenePackFileUpload}
+          />
+          <button
+            type="button"
             onClick={() => {
               setShowScenePackPanel((current) => !current);
               setPendingScenePack(null);
@@ -1987,52 +1957,59 @@ export default function App() {
                   boxSizing: "border-box"
                 }}
               />
-              {!pendingScenePack && (
+              <button
+                type="button"
+                onClick={handleScenePackParse}
+                disabled={!scenePackText.trim()}
+                style={{
+                  ...buttonStyle("#58a6ff"),
+                  marginTop: 10,
+                  opacity: scenePackText.trim() ? 1 : 0.5
+                }}
+              >
+                Validate &amp; Import
+              </button>
+            </div>
+          )}
+
+          {pendingScenePack && (
+            <div
+              style={{
+                marginTop: 14,
+                padding: 14,
+                borderRadius: 12,
+                border: "1px solid #2a2a3e",
+                background: "#12121c"
+              }}
+            >
+              <div style={{ fontSize: 12, color: "#7ee787", marginBottom: 8 }}>
+                ✓ Valid — {pendingScenePack.length} scene
+                {pendingScenePack.length === 1 ? "" : "s"} ready. Replace the current
+                scenes or append to them?
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 <button
                   type="button"
-                  onClick={handleScenePackParse}
-                  disabled={!scenePackText.trim()}
-                  style={{
-                    ...buttonStyle("#58a6ff"),
-                    marginTop: 10,
-                    opacity: scenePackText.trim() ? 1 : 0.5
-                  }}
+                  onClick={() => applyScenePackDrafts(pendingScenePack, "replace")}
+                  style={buttonStyle("#f85149")}
                 >
-                  Validate &amp; Import
+                  Replace current scenes
                 </button>
-              )}
-              {pendingScenePack && (
-                <div style={{ marginTop: 12 }}>
-                  <div style={{ fontSize: 12, color: "#7ee787", marginBottom: 8 }}>
-                    ✓ Valid — {pendingScenePack.length} scene
-                    {pendingScenePack.length === 1 ? "" : "s"} ready. Replace the current
-                    scenes or append to them?
-                  </div>
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    <button
-                      type="button"
-                      onClick={() => applyScenePack("replace")}
-                      style={buttonStyle("#f85149")}
-                    >
-                      Replace current scenes
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => applyScenePack("append")}
-                      style={buttonStyle("#34d058")}
-                    >
-                      Append to current scenes
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPendingScenePack(null)}
-                      style={buttonStyle("#666680")}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              )}
+                <button
+                  type="button"
+                  onClick={() => applyScenePackDrafts(pendingScenePack, "append")}
+                  style={buttonStyle("#34d058")}
+                >
+                  Append to current scenes
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPendingScenePack(null)}
+                  style={buttonStyle("#666680")}
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           )}
 
@@ -2435,6 +2412,45 @@ export default function App() {
             })}
           </div>
         </section>
+
+        {scenes.length === 0 && (
+          <section
+            style={{
+              padding: "48px 28px",
+              borderRadius: 18,
+              border: "1px dashed #33334a",
+              background: "rgba(16, 16, 24, 0.55)",
+              textAlign: "center"
+            }}
+          >
+            <h2 style={{ margin: "0 0 8px", fontSize: 20, color: "#f5f7ff" }}>
+              Start a new video from scratch
+            </h2>
+            <p style={{ margin: "0 auto 20px", maxWidth: 460, color: "#9a9ab5", fontSize: 13 }}>
+              Upload or paste a scene pack JSON to load its scenes. Each scene then gets its
+              own generate, regenerate and poll controls.
+            </p>
+            <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+              <button
+                type="button"
+                onClick={() => scenePackFileInputRef.current?.click()}
+                style={buttonStyle("#a855f7", true)}
+              >
+                Upload Scene Pack
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowScenePackPanel(true);
+                  setPendingScenePack(null);
+                }}
+                style={buttonStyle("#58a6ff")}
+              >
+                Paste Scene Pack
+              </button>
+            </div>
+          </section>
+        )}
 
         <section
           style={{

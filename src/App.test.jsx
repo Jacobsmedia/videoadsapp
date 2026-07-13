@@ -12,14 +12,84 @@ describe("App", () => {
     vi.useRealTimers();
   });
 
-  it("renders the pipeline title and base avatar action", () => {
+  async function seedBaseScene() {
+    const file = new File(
+      [
+        JSON.stringify({
+          basePrompt: "Seed base prompt",
+          scenes: [
+            {
+              id: 1,
+              label: "Base",
+              setting: "Room",
+              dialogue: "Hi",
+              emotion: "Warm",
+              vidPrompt: "She speaks to camera.",
+              videoLengthSeconds: 8
+            }
+          ]
+        })
+      ],
+      "seed.json",
+      { type: "application/json" }
+    );
+
+    fireEvent.change(screen.getByLabelText(/upload scenes json/i), {
+      target: { files: [file] }
+    });
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: /generate base avatar/i })
+      ).toBeInTheDocument()
+    );
+  }
+
+  it("boots into an empty from-scratch state", () => {
     render(<App />);
 
     expect(screen.getByText("NAD+ Ad Pipeline")).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /Generate Base Avatar/i })
-    ).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: /video model/i })).toBeInTheDocument();
+    expect(screen.getByText(/start a new video from scratch/i)).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /generate base avatar/i })
+    ).not.toBeInTheDocument();
+  });
+
+  it("imports scenes from an uploaded scene pack file", async () => {
+    render(<App />);
+
+    const pack = JSON.stringify([
+      {
+        name: "Hook",
+        timeRange: "0:00-0:08",
+        duration: 8,
+        still: { type: "text", prompt: "Base still, vertical 9:16." },
+        motionPrompt: "She leans in.",
+        voLine: "Calling all women over 40..."
+      },
+      {
+        name: "Reveal",
+        timeRange: "0:08-0:18",
+        duration: 10,
+        still: { type: "edit", prompt: "Same woman, reclined on couch." },
+        motionPrompt: "She whispers.",
+        voLine: "Here's what nobody tells you."
+      }
+    ]);
+
+    const file = new File([pack], "pack.json", { type: "application/json" });
+
+    fireEvent.change(screen.getByLabelText(/upload scene pack json/i), {
+      target: { files: [file] }
+    });
+
+    await waitFor(() => expect(screen.getByText("Hook")).toBeInTheDocument());
+    expect(screen.getByText("Reveal")).toBeInTheDocument();
+    // Imported scenes get the same per-scene controls as authored ones.
+    expect(
+      screen.getByRole("button", { name: /generate base avatar/i })
+    ).toBeInTheDocument();
   });
 
   it("loads a valid scenes json file and replaces the visible pipeline", async () => {
@@ -125,12 +195,11 @@ describe("App", () => {
       expect(screen.getByText(/scene 1 is missing "label"/i)).toBeInTheDocument();
     });
 
-    expect(screen.getByText("Hook - Energetic Opening")).toBeInTheDocument();
+    // A rejected upload changes nothing — the from-scratch state stays.
+    expect(screen.getByText(/start a new video from scratch/i)).toBeInTheDocument();
   });
 
   it("shows a new run folder after a generated asset is recorded", async () => {
-    vi.useFakeTimers();
-
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce({
@@ -147,9 +216,11 @@ describe("App", () => {
         })
       });
 
-    vi.stubGlobal("fetch", fetchMock);
-
     render(<App />);
+    await seedBaseScene();
+
+    vi.useFakeTimers();
+    vi.stubGlobal("fetch", fetchMock);
     fireEvent.click(screen.getByRole("button", { name: /generate base avatar/i }));
 
     await act(async () => {
@@ -161,8 +232,6 @@ describe("App", () => {
   });
 
   it("exports a run manifest when export is clicked", async () => {
-    vi.useFakeTimers();
-
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce({
@@ -184,6 +253,10 @@ describe("App", () => {
     const clickSpy = vi.fn();
     const originalCreateElement = document.createElement.bind(document);
 
+    render(<App />);
+    await seedBaseScene();
+
+    vi.useFakeTimers();
     vi.stubGlobal("fetch", fetchMock);
     vi.stubGlobal("URL", { createObjectURL, revokeObjectURL });
     vi.spyOn(document, "createElement").mockImplementation((tagName) => {
@@ -202,7 +275,6 @@ describe("App", () => {
       return originalCreateElement(tagName);
     });
 
-    render(<App />);
     fireEvent.click(screen.getByRole("button", { name: /generate base avatar/i }));
 
     await act(async () => {
@@ -217,8 +289,6 @@ describe("App", () => {
   });
 
   it("shows completed KIE video assets in the scene after a non-Veo job finishes", async () => {
-    vi.useFakeTimers();
-
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce({
@@ -250,9 +320,11 @@ describe("App", () => {
         })
       });
 
-    vi.stubGlobal("fetch", fetchMock);
-
     const { container } = render(<App />);
+    await seedBaseScene();
+
+    vi.useFakeTimers();
+    vi.stubGlobal("fetch", fetchMock);
 
     fireEvent.change(screen.getByRole("combobox", { name: /video model/i }), {
       target: { value: "wan/2-6-image-to-video" }
