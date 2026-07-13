@@ -29,7 +29,12 @@ describe("video model helpers", () => {
       3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15
     ]);
     expect(getSupportedVideoLengthSeconds("grok-imagine/image-to-video")).toEqual([6]);
-    expect(getSupportedVideoLengthSeconds("bytedance/seedance-2")).toEqual([15]);
+    expect(getSupportedVideoLengthSeconds("bytedance/seedance-2")).toEqual([
+      4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15
+    ]);
+    expect(getSupportedVideoLengthSeconds("bytedance/seedance-1.5-pro")).toEqual([
+      4, 5, 6, 7, 8, 9, 10, 11, 12
+    ]);
   });
 
   it("falls back to the model default when a requested length is unsupported", () => {

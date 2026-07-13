@@ -57,7 +57,8 @@ describe("App", () => {
 
     expect(screen.getByText(/loaded 1 scenes from scenes\.json/i)).toBeInTheDocument();
     expect(screen.getByText(/requested 10s/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/video length for scene 1/i)).toHaveValue("8");
+    // Veo supports a single length, so the scene clamps to a fixed 8s.
+    expect(screen.getByText(/fixed at 8s for this model/i)).toBeInTheDocument();
   });
 
   it("shows a scrollable range of length options for Kling 3.0 and keeps a valid imported value", async () => {
@@ -97,12 +98,13 @@ describe("App", () => {
       expect(screen.getByText("Uploaded Hook")).toBeInTheDocument();
     });
 
-    const lengthSelect = screen.getByLabelText(/video length for scene 1/i);
+    // Kling 3.0 supports a wide range, rendered as a slider spanning 3s–15s.
+    const lengthSlider = screen.getByLabelText(/video length for scene 1/i);
 
-    expect(lengthSelect).toHaveValue("12");
+    expect(lengthSlider).toHaveValue("12");
     expect(screen.queryByText(/requested 12s/i)).not.toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "3s" })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "15s" })).toBeInTheDocument();
+    expect(lengthSlider).toHaveAttribute("min", "3");
+    expect(lengthSlider).toHaveAttribute("max", "15");
   });
 
   it("shows a validation error for an invalid upload and keeps the current scenes", async () => {
