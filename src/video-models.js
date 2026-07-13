@@ -175,7 +175,10 @@ export const VIDEO_MODEL_OPTIONS = [
     label: "Bytedance Seedance 1.5 Pro",
     provider: "Bytedance",
     api: "job",
-    supportedDurationSeconds: [8],
+    durationType: "range",
+    minDurationSeconds: 4,
+    maxDurationSeconds: 12,
+    durationStepSeconds: 1,
     defaultDurationSeconds: 8,
     audioControl: { field: "generate_audio", value: true },
     buildInput: (prompt, imageUrl, durationSeconds) => ({
@@ -183,7 +186,7 @@ export const VIDEO_MODEL_OPTIONS = [
       input_urls: [imageUrl],
       aspect_ratio: "9:16",
       resolution: "720p",
-      duration: asStringDuration(durationSeconds),
+      duration: asNumberDuration(durationSeconds),
       nsfw_checker: false
     })
   }),
@@ -192,8 +195,11 @@ export const VIDEO_MODEL_OPTIONS = [
     label: "Bytedance Seedance 2.0",
     provider: "Bytedance",
     api: "job",
-    supportedDurationSeconds: [15],
-    defaultDurationSeconds: 15,
+    durationType: "range",
+    minDurationSeconds: 4,
+    maxDurationSeconds: 15,
+    durationStepSeconds: 1,
+    defaultDurationSeconds: 8,
     audioControl: { field: "generate_audio", value: true },
     buildInput: (prompt, imageUrl, durationSeconds) => ({
       prompt,
@@ -208,8 +214,11 @@ export const VIDEO_MODEL_OPTIONS = [
     label: "Bytedance Seedance 2.0 Fast",
     provider: "Bytedance",
     api: "job",
-    supportedDurationSeconds: [15],
-    defaultDurationSeconds: 15,
+    durationType: "range",
+    minDurationSeconds: 4,
+    maxDurationSeconds: 15,
+    durationStepSeconds: 1,
+    defaultDurationSeconds: 8,
     audioControl: { field: "generate_audio", value: true },
     buildInput: (prompt, imageUrl, durationSeconds) => ({
       prompt,

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getAssetPublicBaseUrl, getAssetSignerPath, getProxyUrl } from "./config.js";
 import { parsePipelineJson } from "./pipeline-import.js";
+import { draftToScene, parseScenePack, serializeScenePack } from "./scene-pack.js";
 import { VideoEditor } from "./VideoEditor.jsx";
 import {
   attachRunAsset,
@@ -1034,6 +1035,9 @@ export default function App() {
   const [expandedRunIds, setExpandedRunIds] = useState({});
   const [editSceneId, setEditSceneId] = useState(null);
   const [importMessage, setImportMessage] = useState(null);
+  const [showScenePackPanel, setShowScenePackPanel] = useState(false);
+  const [scenePackText, setScenePackText] = useState("");
+  const [pendingScenePack, setPendingScenePack] = useState(null);
   const [prompts, setPrompts] = useState(() =>
     buildPrompts(
       normalizeScenesForVideoModel(defaultScenes, DEFAULT_VIDEO_MODEL_ID).scenes,
@@ -1166,6 +1170,118 @@ export default function App() {
     },
     [clearAllTimers, videoModelId]
   );
+
+  // Validate the pasted scene-pack JSON. On success we stash the parsed drafts and
+  // let the user choose whether to replace or append (see applyScenePack below).
+  const handleScenePackParse = useCallback(() => {
+    try {
+      const drafts = parseScenePack(scenePackText);
+      setPendingScenePack(drafts);
+      setImportMessage(null);
+    } catch (error) {
+      setPendingScenePack(null);
+      setImportMessage({ type: "error", text: error.message });
+    }
+  }, [scenePackText]);
+
+  const applyScenePack = useCallback(
+    (mode) => {
+      const drafts = pendingScenePack;
+      if (!drafts) {
+        return;
+      }
+
+      if (mode === "replace") {
+        if (drafts[0].stillType !== "text") {
+          setImportMessage({
+            type: "error",
+            text: 'To replace all scenes, the first scene\'s still.type must be "text" — it becomes the base avatar every later scene edits from.'
+          });
+          return;
+        }
+
+        const scenesWithIds = drafts.map((draft, index) => draftToScene(draft, index + 1));
+        const normalized = normalizeScenesForVideoModel(scenesWithIds, videoModelId);
+        const nextPrompts = {};
+        normalized.scenes.forEach((scene, index) => {
+          nextPrompts[scene.id] = drafts[index].stillPrompt;
+        });
+
+        clearAllTimers();
+        activeRunIdRef.current = null;
+        setScenes(normalized.scenes);
+        setPrompts(nextPrompts);
+        setImages({});
+        setVideos({});
+        setProductImages({});
+        setProposedVideoLengths({});
+        setActiveRunId(null);
+        setEditSceneId(null);
+        setVideoLengthWarnings(normalized.warnings);
+        setImportMessage({
+          type: "success",
+          text: `Replaced scene list with ${normalized.scenes.length} imported scene${
+            normalized.scenes.length === 1 ? "" : "s"
+          }.`
+        });
+      } else {
+        const maxId = scenes.reduce((m, s) => Math.max(m, s.id), 0);
+        const scenesWithIds = drafts.map((draft, index) => draftToScene(draft, maxId + index + 1));
+        const normalized = normalizeScenesForVideoModel(scenesWithIds, videoModelId);
+
+        setScenes((current) => [...current, ...normalized.scenes]);
+        setPrompts((current) => {
+          const next = { ...current };
+          normalized.scenes.forEach((scene, index) => {
+            next[scene.id] = drafts[index].stillPrompt;
+          });
+          return next;
+        });
+        setVideoLengthWarnings((current) => ({ ...current, ...normalized.warnings }));
+        setImportMessage({
+          type: "success",
+          text: `Appended ${normalized.scenes.length} imported scene${
+            normalized.scenes.length === 1 ? "" : "s"
+          } to the current list.`
+        });
+      }
+
+      setPendingScenePack(null);
+      setScenePackText("");
+      setShowScenePackPanel(false);
+    },
+    [pendingScenePack, scenes, videoModelId, clearAllTimers]
+  );
+
+  const exportScenePack = useCallback(async () => {
+    const pack = serializeScenePack(scenes, prompts);
+    const json = JSON.stringify(pack, null, 2);
+
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(json);
+        setImportMessage({
+          type: "success",
+          text: `Copied ${pack.length} scene${pack.length === 1 ? "" : "s"} to the clipboard as a scene pack.`
+        });
+        return;
+      }
+    } catch {
+      // Fall through to the download fallback when clipboard access is denied.
+    }
+
+    const blob = new Blob([json], { type: "application/json" });
+    const objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = objectUrl;
+    link.download = "scene-pack.json";
+    link.click();
+    URL.revokeObjectURL(objectUrl);
+    setImportMessage({
+      type: "success",
+      text: `Downloaded ${pack.length} scene${pack.length === 1 ? "" : "s"} as scene-pack.json.`
+    });
+  }, [scenes, prompts]);
 
   const handleVideoModelChange = useCallback((nextModelId) => {
     setVideoModelId(nextModelId);
@@ -1391,10 +1507,16 @@ export default function App() {
 
       try {
         const model = getImageModelById(imageModelId);
-        const body =
-          sceneId === 1
-            ? model.buildT2iBody(prompts[sceneId])
-            : model.buildI2iBody(prompts[sceneId], [baseUrl]);
+        // A scene's still is text2img when it is the base avatar (scene 1) or when
+        // an imported scene explicitly declares still.type "text"; everything else
+        // edits from the approved base still.
+        const scene = scenes.find((entry) => entry.id === sceneId);
+        const useTextToImage = scene?.stillType
+          ? scene.stillType === "text"
+          : sceneId === 1;
+        const body = useTextToImage
+          ? model.buildT2iBody(prompts[sceneId])
+          : model.buildI2iBody(prompts[sceneId], [baseUrl]);
         const taskId = await createImageTask(body, model.createPath);
 
         setImages((current) => ({
@@ -1409,7 +1531,7 @@ export default function App() {
         }));
       }
     },
-    [baseUrl, ensureActiveRun, imageModelId, pollTask, prompts]
+    [baseUrl, ensureActiveRun, imageModelId, pollTask, prompts, scenes]
   );
 
   const approveImage = useCallback(
@@ -1811,6 +1933,108 @@ export default function App() {
             style={{ display: "none" }}
             onChange={handleScenesUpload}
           />
+          <button
+            type="button"
+            onClick={() => {
+              setShowScenePackPanel((current) => !current);
+              setPendingScenePack(null);
+            }}
+            style={buttonStyle("#a855f7")}
+          >
+            {showScenePackPanel ? "Close Scene Pack" : "Paste Scene Pack"}
+          </button>
+          <button
+            type="button"
+            onClick={exportScenePack}
+            style={buttonStyle("#34d058")}
+          >
+            Export Scene Pack
+          </button>
+
+          {showScenePackPanel && (
+            <div
+              style={{
+                marginTop: 14,
+                padding: 14,
+                borderRadius: 12,
+                border: "1px solid #2a2a3e",
+                background: "#12121c"
+              }}
+            >
+              <div style={{ fontSize: 12, color: "#9fa4c6", marginBottom: 8, fontWeight: 700 }}>
+                Paste a scene-pack JSON array
+              </div>
+              <textarea
+                aria-label="Scene pack JSON"
+                value={scenePackText}
+                onChange={(event) => {
+                  setScenePackText(event.target.value);
+                  setPendingScenePack(null);
+                }}
+                placeholder='[{ "name": "Hook", "timeRange": "0:00-0:08", "duration": 8, "still": { "type": "text", "prompt": "..." }, "motionPrompt": "...", "voLine": "..." }]'
+                style={{
+                  width: "100%",
+                  minHeight: 160,
+                  background: "#1e1e2e",
+                  border: "1px solid #2a2a3e",
+                  borderRadius: 10,
+                  color: "#d0d0e8",
+                  fontFamily: '"JetBrains Mono", monospace',
+                  fontSize: 12,
+                  padding: "10px 12px",
+                  resize: "vertical",
+                  lineHeight: 1.5,
+                  boxSizing: "border-box"
+                }}
+              />
+              {!pendingScenePack && (
+                <button
+                  type="button"
+                  onClick={handleScenePackParse}
+                  disabled={!scenePackText.trim()}
+                  style={{
+                    ...buttonStyle("#58a6ff"),
+                    marginTop: 10,
+                    opacity: scenePackText.trim() ? 1 : 0.5
+                  }}
+                >
+                  Validate &amp; Import
+                </button>
+              )}
+              {pendingScenePack && (
+                <div style={{ marginTop: 12 }}>
+                  <div style={{ fontSize: 12, color: "#7ee787", marginBottom: 8 }}>
+                    ✓ Valid — {pendingScenePack.length} scene
+                    {pendingScenePack.length === 1 ? "" : "s"} ready. Replace the current
+                    scenes or append to them?
+                  </div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <button
+                      type="button"
+                      onClick={() => applyScenePack("replace")}
+                      style={buttonStyle("#f85149")}
+                    >
+                      Replace current scenes
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => applyScenePack("append")}
+                      style={buttonStyle("#34d058")}
+                    >
+                      Append to current scenes
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPendingScenePack(null)}
+                      style={buttonStyle("#666680")}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {importMessage && (
             <div
