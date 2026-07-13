@@ -1,0 +1,19 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "kie-mcp",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-13",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "durable_objects": {
+    "bindings": [
+      { "name": "KIE_MCP_AGENT", "class_name": "KieMcpAgent" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["KieMcpAgent"] }
+  ],
+  "kv_namespaces": [
+    { "binding": "JOBS_KV", "id": "REPLACE_WITH_KV_NAMESPACE_ID" }
+  ]
+}
